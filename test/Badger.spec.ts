@@ -1,5 +1,3 @@
-import crypto from "crypto";
-
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { Contract } from "ethers";
@@ -9,28 +7,22 @@ const baseUri = "https://api.test.com/stuff/{id}.json";
 
 const setupTest = deployments.createFixture(async ({ deployments, ethers }) => {
   await deployments.fixture();
-  const [owner] = await ethers.getSigners();
   const badgerFactory = await ethers.getContractFactory("Badger");
-  const badgerInstance = await badgerFactory.deploy(owner.address, baseUri);
+  const badgerInstance = await badgerFactory.deploy(baseUri);
   await badgerInstance.deployed();
 
   return await badgerInstance.deployed();
 });
 
 describe("Badger", function () {
-  // base config
-  const defaultUriId = "QmTPHQWYMPrwsRuuhmehpbFtWYFNWLcWGmio9KxPk7fKfk";
-
   const amount = 2;
   const initalTokenId = 1;
   const secondTokenId = initalTokenId + 1;
-  const defaultTransferability = false;
 
   let badgerInstance: Contract,
     owner: SignerWithAddress,
     alice: SignerWithAddress,
     bob: SignerWithAddress;
-  //  owner, alice, bob;
 
   before("get signers", async () => {
     [owner, alice, bob] = await ethers.getSigners();
@@ -46,7 +38,6 @@ describe("Badger", function () {
 
   describe("#mint", () => {
     it("mints the correct token amount to the recipient", async function () {
-      await badgerInstance.createTokenTier(defaultTransferability);
       await badgerInstance.mint(alice.address, initalTokenId, amount);
 
       const tokenAmount = await badgerInstance.balanceOf(
@@ -55,14 +46,6 @@ describe("Badger", function () {
       );
 
       expect(tokenAmount).to.equal(amount);
-    });
-
-    context("when token tier does not exist", () => {
-      it("reverts 'Tier does not exist", async function () {
-        await expect(
-          badgerInstance.mint(alice.address, 2, amount)
-        ).to.be.revertedWith("Tier does not exist");
-      });
     });
 
     context("when called by non-contract-owner", () => {
@@ -75,14 +58,6 @@ describe("Badger", function () {
   });
 
   describe("#burn", () => {
-    context("when token tier does not exist", () => {
-      it("reverts 'Tier does not exist'", async function () {
-        await expect(
-          badgerInstance.burn(alice.address, 2, amount)
-        ).to.be.revertedWith("Tier does not exist");
-      });
-    });
-
     context("when called by non-contract-owner", () => {
       it("reverts 'Ownable: caller is not the owner'", async function () {
         await expect(
@@ -91,27 +66,15 @@ describe("Badger", function () {
       });
     });
 
-    context("with existing token tier", () => {
-      beforeEach("create token tier & mint", async () => {
-        await badgerInstance.createTokenTier(defaultTransferability);
-        await badgerInstance.mint(alice.address, initalTokenId, amount);
-      });
+    it("burns one token from alice", async () => {
+      await badgerInstance.mint(alice.address, initalTokenId, amount);
 
-      it("burns one token from alice", async () => {
-        const burnAmount = 1;
-        await badgerInstance.burn(alice.address, initalTokenId, burnAmount);
-        expect(
-          await badgerInstance.balanceOf(alice.address, initalTokenId)
-        ).to.equal(amount - burnAmount);
-      });
+      const burnAmount = 1;
+      await badgerInstance.burn(alice.address, initalTokenId, burnAmount);
 
-      it("burns two tokens from alice", async () => {
-        const burnAmount = 2;
-        await badgerInstance.burn(alice.address, initalTokenId, burnAmount);
-        expect(
-          await badgerInstance.balanceOf(alice.address, initalTokenId)
-        ).to.equal(amount - burnAmount);
-      });
+      expect(
+        await badgerInstance.balanceOf(alice.address, initalTokenId)
+      ).to.equal(amount - burnAmount);
     });
   });
 
@@ -122,12 +85,8 @@ describe("Badger", function () {
 
     let addresses: string[];
 
-    beforeEach("create TWO token tiers", async () => {
+    beforeEach("get addresses", async () => {
       addresses = [alice.address, bob.address];
-
-      await badgerInstance.createTokenTier(defaultTransferability);
-
-      await badgerInstance.createTokenTier(defaultTransferability);
     });
 
     context("with valid inputs and access rights", () => {
@@ -171,44 +130,6 @@ describe("Badger", function () {
         ).to.be.revertedWith("Ownable: caller is not the owner");
       });
     });
-
-    context("when one token tier does not exist", () => {
-      const nonExistentTokenId = 66;
-
-      it("reverts 'Tier does not exist'", async () => {
-        expect(
-          badgerInstance.mintToMultiple(
-            addresses,
-            [initalTokenId, nonExistentTokenId],
-            amounts
-          )
-        ).to.be.revertedWith("Tier does not exist");
-      });
-    });
-
-    context("with large badge size", () => {
-      const batchSize = 55;
-
-      it("costs gas", async () => {
-        const addresses = [];
-
-        for (let i = 0; i < batchSize; i++) {
-          const id = crypto.randomBytes(32).toString("hex");
-          const privateKey = "0x" + id;
-          const wallet = new ethers.Wallet(privateKey);
-          addresses.push(wallet.address);
-        }
-
-        const ids = new Array(55).fill(initalTokenId);
-        const amounts = new Array(55).fill(1);
-
-        const gas = await badgerInstance.estimateGas.mintToMultiple(
-          addresses,
-          ids,
-          amounts
-        );
-      });
-    });
   });
 
   describe("#burnFromMultiple", () => {
@@ -219,10 +140,8 @@ describe("Badger", function () {
 
     let addresses: string[];
 
-    beforeEach("create TWO token tiers", async () => {
+    beforeEach("get addresses", async () => {
       addresses = [alice.address, bob.address];
-      await badgerInstance.createTokenTier(defaultTransferability);
-      await badgerInstance.createTokenTier(defaultTransferability);
     });
 
     context("with valid inputs and access rights", () => {
@@ -274,180 +193,36 @@ describe("Badger", function () {
     });
   });
 
-  /*
-    creating/editing token tier
-  */
-
-  describe("#createTokenTier", () => {
-    it("emits an event 'TierChange'", async () => {
-      await expect(badgerInstance.createTokenTier(defaultTransferability))
-        .to.emit(badgerInstance, "TierChange")
-        .withArgs(initalTokenId, defaultTransferability);
+  describe("#safeTransferFrom", () => {
+    beforeEach("mint", async () => {
+      await badgerInstance.mint(alice.address, initalTokenId, amount);
     });
 
-    context("when called by non-contract-owner", () => {
-      it("reverts 'Ownable: caller is not the owner'", () => {
-        expect(
-          badgerInstance.connect(alice).createTokenTier(defaultTransferability)
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-  });
-
-  describe("#updateTransferableStatus", () => {
-    const newTransferability = true;
-
-    beforeEach("create new token tier", async () => {
-      await badgerInstance.createTokenTier(defaultTransferability);
-    });
-
-    it("saves the new uriId and returns correct uri", async () => {
-      await badgerInstance.updateTransferableStatus(
-        initalTokenId,
-        newTransferability
-      );
-
-      const transferable = await badgerInstance.tokenTiers(initalTokenId);
-      expect(transferable).to.equal(newTransferability);
-    });
-
-    it("emits an event 'TierChange'", async () => {
-      await expect(
-        badgerInstance.updateTransferableStatus(
-          initalTokenId,
-          newTransferability
-        )
-      )
-        .to.emit(badgerInstance, "TierChange")
-        .withArgs(initalTokenId, newTransferability);
-    });
-
-    context("when called by non-contract-owner", () => {
-      it("reverts 'Ownable: caller is not the owner'", () => {
+    context("when called by owner of the token", () => {
+      it("reverts 'Transfer disabled for this tokenId'", () => {
         expect(
           badgerInstance
             .connect(alice)
-            .updateTransferableStatus(initalTokenId, newTransferability)
-        ).to.be.revertedWith("Ownable: caller is not the owner");
-      });
-    });
-
-    context("when token tier does not exist", () => {
-      const nonExistentTokenId = 66;
-
-      it("reverts 'Tier does not exist'", () => {
-        expect(
-          badgerInstance.updateTransferableStatus(
-            nonExistentTokenId,
-            newTransferability
-          )
-        ).to.be.revertedWith("Tier does not exist");
-      });
-    });
-  });
-
-  // /*
-  //   Transferring tokens
-  // */
-
-  describe("#safeTransferFrom", () => {
-    context("with non-transferable token", () => {
-      beforeEach("create token tier & mint", async () => {
-        await badgerInstance.createTokenTier(defaultTransferability);
-        await badgerInstance.mint(alice.address, initalTokenId, amount);
-      });
-
-      context("when called by owner of the token", () => {
-        it("reverts 'Transfer disabled for this tokenId'", () => {
-          expect(
-            badgerInstance
-              .connect(alice)
-              .safeTransferFrom(
-                alice.address,
-                bob.address,
-                initalTokenId,
-                amount,
-                "0x00"
-              )
-          ).to.be.revertedWith("Transfer disabled for this tier");
-        });
-      });
-
-      context("when called by owner of the contract", () => {
-        it("reverts 'Transfer disabled for this tokenId'", () => {
-          expect(
-            badgerInstance.safeTransferFrom(
+            .safeTransferFrom(
               alice.address,
               bob.address,
               initalTokenId,
               amount,
               "0x00"
             )
-          ).to.be.revertedWith("Transfer disabled for this tier");
-        });
-      });
-    });
-
-    context("with transferable token", () => {
-      beforeEach("create token tier & mint", async () => {
-        await badgerInstance.createTokenTier(true);
-        await badgerInstance.mint(alice.address, initalTokenId, amount);
-      });
-
-      it("transfers token to bob", async () => {
-        await badgerInstance
-          .connect(alice)
-          .safeTransferFrom(
-            alice.address,
-            bob.address,
-            initalTokenId,
-            amount,
-            "0x00"
-          );
-
-        const bobsBalance = await badgerInstance.balanceOf(
-          bob.address,
-          initalTokenId
-        );
-
-        expect(bobsBalance).to.equal(amount);
+        ).to.be.revertedWith("TransferDisabled()");
       });
     });
   });
 
   describe("#safeBatchTransferFrom", () => {
     beforeEach("create token tier & mint", async () => {
-      await badgerInstance.createTokenTier(defaultTransferability);
       await badgerInstance.mint(alice.address, initalTokenId, amount);
     });
 
-    context("when non-transferable", () => {
-      it("reverts 'Transfer disabled for this tier'", async () => {
-        await expect(
-          badgerInstance
-            .connect(alice)
-            .safeBatchTransferFrom(
-              alice.address,
-              bob.address,
-              [initalTokenId, secondTokenId],
-              [amount, amount],
-              "0x00"
-            )
-        ).to.be.revertedWith("Transfer disabled for this tier");
-      });
-    });
-
-    context("when transferable", () => {
-      beforeEach("mint tokens and set transferability to true", async () => {
-        await badgerInstance.mint(alice.address, initalTokenId, amount);
-        await badgerInstance.mint(alice.address, secondTokenId, amount);
-
-        await badgerInstance.updateTransferableStatus(initalTokenId, true);
-        await badgerInstance.updateTransferableStatus(secondTokenId, true);
-      });
-
-      it("reverts 'Transfer disabled for this tier'", async () => {
-        await badgerInstance
+    it("reverts 'Transfer disabled for this tier'", async () => {
+      await expect(
+        badgerInstance
           .connect(alice)
           .safeBatchTransferFrom(
             alice.address,
@@ -455,31 +230,20 @@ describe("Badger", function () {
             [initalTokenId, secondTokenId],
             [amount, amount],
             "0x00"
-          );
-
-        const bobsBalances = [
-          await badgerInstance.balanceOf(bob.address, initalTokenId),
-          await badgerInstance.balanceOf(bob.address, secondTokenId),
-        ];
-
-        expect(bobsBalances.map((b) => b.toNumber())).to.eql([amount, amount]);
-      });
+          )
+      ).to.be.revertedWith("TransferDisabled()");
     });
   });
 
-  // /*
-  //   Querying token URI
-  // */
-
-  describe("#uri", () => {
+  describe("#setApprovalForAll", () => {
     beforeEach("create token tier & mint", async () => {
-      await badgerInstance.createTokenTier(defaultTransferability);
       await badgerInstance.mint(alice.address, initalTokenId, amount);
     });
 
-    it("returns the baseUri appended by tokenUri", async () => {
-      const uri = await badgerInstance.uri(initalTokenId);
-      expect(uri).to.equal(baseUri);
+    it("reverts 'Transfer disabled for this tier'", async () => {
+      await expect(
+        badgerInstance.connect(alice).setApprovalForAll(bob.address, true)
+      ).to.be.revertedWith("TransferDisabled()");
     });
   });
 });

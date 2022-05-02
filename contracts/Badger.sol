@@ -3,35 +3,15 @@
 
 pragma solidity ^0.8.6;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/CountersUpgradeable.sol";
-import "@gnosis.pm/zodiac/contracts/core/Module.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Badger is Module, ERC1155Upgradeable {
+contract Badger is ERC1155, Ownable {
     /*
-        libraries
-    */
-    using CountersUpgradeable for CountersUpgradeable.Counter;
-
-    /*
-        State variables
-    */
-    CountersUpgradeable.Counter counter;
-    mapping(uint256 => TokenTier) public tokenTiers; // tokenId => TokenTier
-
-    /*
-        Structs
+        Errors
     */
 
-    struct TokenTier {
-        bool transferable;
-    }
-
-    /*
-        Events
-    */
-
-    event TierChange(uint256 indexed tokenId, bool transferable);
+    error TransferDisabled();
 
     /*
         Modifiers
@@ -50,29 +30,11 @@ contract Badger is Module, ERC1155Upgradeable {
         _;
     }
 
-    modifier isTier(uint256 tokenId) {
-        require(tokenId <= counter.current(), "Tier does not exist");
-        _;
-    }
-
-    modifier isValidTransfer(uint256 tokenId, address from) {
-        require(
-            tokenTiers[tokenId].transferable,
-            "Transfer disabled for this tier"
-        );
-        _;
-    }
-
     /*
         Constructor
     */
 
-    constructor(address _owner, string memory _baseUri) {
-        counter.increment();
-        _setURI(_baseUri);
-        bytes memory initializeParams = abi.encode(_owner);
-        setUp(initializeParams);
-    }
+    constructor(string memory _baseUri) ERC1155(_baseUri) {}
 
     /*
         Minting & burning
@@ -148,117 +110,20 @@ contract Badger is Module, ERC1155Upgradeable {
         Transferring
     */
 
-    /**
-     * @dev                 transfers tokens from one address to another allowing custom data parameter
-     * @notice              this is the standard transfer interface for ERC1155 tokens which contracts expect
-     * @param from          address from which token will be transferred
-     * @param to            recipient of address
-     * @param id            id of token to be transferred
-     * @param amount        amount of token to be transferred
-     */
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
-    ) public override isValidTransfer(id, from) {
-        super.safeTransferFrom(from, to, id, amount, data);
+    function setApprovalForAll(address, bool) public virtual override {
+        revert TransferDisabled();
     }
 
-    /**
-     * @dev                 batch transfers tokens from one address to another allowing custom data parameter
-     * @notice              this is the standard transfer interface for ERC1155 tokens which contracts expect
-     * @param from          address from which token will be transferred
-     * @param to            recipient of address
-     * @param ids           ids of token to be transferred
-     * @param amounts       amounts of token to be transferred
-     */
-    function safeBatchTransferFrom(
+    function _beforeTokenTransfer(
+        address,
         address from,
         address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
-    ) public override {
-        for (uint8 i = 0; i < ids.length; i++) {
-            require(
-                tokenTiers[ids[i]].transferable,
-                "Transfer disabled for this tier"
-            );
+        uint256[] memory,
+        uint256[] memory,
+        bytes memory
+    ) internal pure override {
+        if (to != address(0) && from != address(0)) {
+            revert TransferDisabled();
         }
-        super.safeBatchTransferFrom(from, to, ids, amounts, data);
-    }
-
-    /*
-        Configuration
-    */
-
-    /**
-     * @dev                 creates a new token tier
-     * @param transferable  determines if tokens from specific tier should be transferable or not
-     */
-    function createTokenTier(bool transferable)
-        public
-        onlyOwner
-        returns (uint256)
-    {
-        _createTokenTier(counter.current(), transferable);
-        counter.increment();
-        return counter.current() - 1;
-    }
-
-    /**
-     * @dev                 updates transferability for a given token id (tier)
-     * @param tokenId       tokenId for which transferability should be updated
-     * @param transferable  determines whether tokens from tier should be transferable or not
-     */
-    function updateTransferableStatus(uint256 tokenId, bool transferable)
-        public
-        onlyOwner
-        isTier(tokenId)
-    {
-        tokenTiers[tokenId].transferable = transferable;
-        emit TierChange(tokenId, transferable);
-    }
-
-    /*
-        Queries
-    */
-
-    /*
-        Internal functions
-    */
-
-    function _mint(
-        address account,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
-    ) internal override isTier(id) {
-        super._mint(account, id, amount, data);
-    }
-
-    function _burn(
-        address account,
-        uint256 id,
-        uint256 amount
-    ) internal override isTier(id) {
-        super._burn(account, id, amount);
-    }
-
-    function _createTokenTier(uint256 tokenId, bool transferable) internal {
-        tokenTiers[tokenId] = TokenTier(transferable);
-        emit TierChange(tokenId, transferable);
-    }
-
-    /// @dev Initialize function, will be triggered when a new proxy is deployed
-    /// @param initializeParams Parameters of initialization encoded
-    function setUp(bytes memory initializeParams) public override initializer {
-        __Ownable_init();
-        address _owner = abi.decode(initializeParams, (address));
-
-        setAvatar(_owner);
-        setTarget(_owner);
     }
 }
