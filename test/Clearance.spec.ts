@@ -10,7 +10,11 @@ describe.only("Clearance", async () => {
     const TestContract = await hre.ethers.getContractFactory("TestContract");
     const testContract = await TestContract.deploy();
     const testContractClone = await TestContract.deploy();
-    return { Avatar, avatar, testContract, testContractClone };
+
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
+    return { Avatar, avatar, testContract, testContractClone, badger };
   });
 
   const setupRolesWithOwnerAndInvoker = deployments.createFixture(async () => {
@@ -18,21 +22,20 @@ describe.only("Clearance", async () => {
 
     const [owner, invoker] = waffle.provider.getWallets();
 
-    const Permissions = await hre.ethers.getContractFactory("Permissions");
+    const Permissions = await hre.ethers.getContractFactory("PermissionsDelay");
     const permissions = await Permissions.deploy();
-    const Modifier = await hre.ethers.getContractFactory("Roles", {
+    const Modifier = await hre.ethers.getContractFactory("BadgeRoles", {
       libraries: {
-        Permissions: permissions.address,
+        PermissionsDelay: permissions.address,
       },
     });
 
     const modifier = await Modifier.deploy(
       owner.address,
       base.avatar.address,
-      base.avatar.address
+      base.avatar.address,
+      base.badger.address
     );
-
-    await modifier.enableModule(invoker.address);
 
     return {
       ...base,
@@ -49,37 +52,35 @@ describe.only("Clearance", async () => {
   const OPTIONS_BOTH = 2;
 
   it.only("allows and then disallows a target", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
-    const ROLE_ID = 0;
+    const BADGE_ID = 1;
     const { data } = await testContract.populateTransaction.doNothing();
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, data, 0)
+        .execTransactionFromModule(testContract.address, 0, data, 0, BADGE_ID)
     ).to.be.revertedWith("TargetAddressNotAllowed()");
 
     await modifier
       .connect(owner)
-      .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+      .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, data, 0)
+        .execTransactionFromModule(testContract.address, 0, data, 0, BADGE_ID)
     ).to.not.be.reverted;
 
-    await modifier.connect(owner).revokeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).revokeTarget(BADGE_ID, testContract.address);
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, data, 0)
+        .execTransactionFromModule(testContract.address, 0, data, 0, BADGE_ID)
     ).to.be.revertedWith("TargetAddressNotAllowed()");
   });
 
