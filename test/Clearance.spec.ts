@@ -2,7 +2,7 @@ import { expect } from "chai";
 import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 
-describe("Clearance", async () => {
+describe.only("Clearance", async () => {
   const baseSetup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");
@@ -48,7 +48,7 @@ describe("Clearance", async () => {
   const OPTIONS_DELEGATECALL = 1;
   const OPTIONS_BOTH = 2;
 
-  it("allows and then disallows a target", async () => {
+  it.only("allows and then disallows a target", async () => {
     const { modifier, testContract, owner, invoker } =
       await setupRolesWithOwnerAndInvoker();
     const ROLE_ID = 0;
