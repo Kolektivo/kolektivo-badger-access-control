@@ -120,16 +120,14 @@ contract BadgeRoles is Module {
         uint16 role,
         address targetAddress,
         bytes4 functionSig,
-        ExecutionOptions options,
-        uint256 txCooldown
+        ExecutionOptions options
     ) external onlyOwner {
         PermissionsDelay.scopeAllowFunction(
             badgeRoles[role],
             role,
             targetAddress,
             functionSig,
-            options,
-            txCooldown
+            options
         );
     }
 

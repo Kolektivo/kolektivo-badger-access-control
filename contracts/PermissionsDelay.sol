@@ -417,8 +417,7 @@ library PermissionsDelay {
         uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
-        ExecutionOptions options,
-        uint256 txCooldown
+        ExecutionOptions options
     ) external {
         /*
          * packLeft(
