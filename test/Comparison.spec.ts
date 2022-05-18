@@ -11,23 +11,25 @@ describe("Comparison", async () => {
     const testContract = await TestContract.deploy();
     const testContractClone = await TestContract.deploy();
 
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
     const [owner, invoker] = waffle.provider.getWallets();
 
-    const Permissions = await hre.ethers.getContractFactory("Permissions");
+    const Permissions = await hre.ethers.getContractFactory("PermissionsDelay");
     const permissions = await Permissions.deploy();
-    const Modifier = await hre.ethers.getContractFactory("Roles", {
+    const Modifier = await hre.ethers.getContractFactory("BadgeRoles", {
       libraries: {
-        Permissions: permissions.address,
+        PermissionsDelay: permissions.address,
       },
     });
 
     const modifier = await Modifier.deploy(
       owner.address,
       avatar.address,
-      avatar.address
+      avatar.address,
+      badger.address
     );
-
-    await modifier.enableModule(invoker.address);
 
     return {
       Avatar,
@@ -38,6 +40,7 @@ describe("Comparison", async () => {
       modifier,
       owner,
       invoker,
+      badger,
     };
   });
 
@@ -56,9 +59,9 @@ describe("Comparison", async () => {
   const TYPE_DYNAMIC32 = 2;
 
   it("scopeFunction throws on input length mistmatch", async () => {
-    const { modifier, testContract, owner } = await setup();
+    const { modifier, testContract, owner, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithTwoMixedParams")
     );
@@ -67,7 +70,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [true, false],
@@ -82,7 +85,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [true, false],
@@ -97,7 +100,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [true, false],
@@ -112,7 +115,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [true, false],
@@ -125,10 +128,10 @@ describe("Comparison", async () => {
   });
 
   it("enforces paramComp for scopeFunction", async () => {
-    const { modifier, testContract, owner } = await setup();
+    const { modifier, testContract, owner, badger } = await setup();
 
     const IS_SCOPED = true;
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -137,7 +140,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [!IS_SCOPED, IS_SCOPED, !IS_SCOPED],
@@ -156,7 +159,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [!IS_SCOPED, IS_SCOPED, !IS_SCOPED],
@@ -176,7 +179,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [!IS_SCOPED, IS_SCOPED, IS_SCOPED],
@@ -196,7 +199,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [!IS_SCOPED, IS_SCOPED, IS_SCOPED],
@@ -212,9 +215,9 @@ describe("Comparison", async () => {
     ).to.not.be.reverted;
   });
   it("enforces paramComp for scopeParameter", async () => {
-    const { modifier, testContract, owner } = await setup();
+    const { modifier, testContract, owner, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -223,7 +226,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -237,7 +240,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -251,7 +254,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -265,7 +268,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -279,7 +282,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -293,7 +296,7 @@ describe("Comparison", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -305,9 +308,9 @@ describe("Comparison", async () => {
   });
 
   it("passes an eq comparison", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
+    const BADGE_ID = 1;
 
-    const ROLE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
@@ -319,20 +322,23 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.fnWithSingleParam(a)).data,
-          0
+          0,
+          BADGE_ID
         );
+
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     await modifier
       .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+      .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -345,9 +351,9 @@ describe("Comparison", async () => {
     await expect(invoke(123)).to.not.be.reverted;
   });
   it("passes an eq comparison for dynamic", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithTwoMixedParams")
     );
@@ -360,20 +366,19 @@ describe("Comparison", async () => {
           0,
           (await testContract.populateTransaction.fnWithTwoMixedParams(a, b))
             .data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -382,16 +387,16 @@ describe("Comparison", async () => {
         ethers.utils.solidityPack(["string"], ["Some string"])
       );
 
-    await expect(invoke(false, "Some string")).to.not.be.reverted;
+    await expect(invoke(false, "Some string")).to.not.be.revertedWith("lel");
     await expect(invoke(false, "Some other string")).to.be.revertedWith(
       "ParameterNotAllowed()"
     );
   });
 
   it("passes an eq comparison for dynamic - empty buffer", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("dynamic")
     );
@@ -403,20 +408,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.dynamic(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -430,9 +434,9 @@ describe("Comparison", async () => {
   });
 
   it("passes an eq comparison for dynamic32", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("dynamicDynamic32")
     );
@@ -444,20 +448,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.dynamicDynamic32(a, b)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -486,9 +489,9 @@ describe("Comparison", async () => {
   });
 
   it("passes an eq comparison for dynamic32 - empty array", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("dynamic32")
     );
@@ -500,20 +503,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.dynamic32(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -529,9 +531,9 @@ describe("Comparison", async () => {
   });
 
   it("re-scopes an eq paramComp", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
@@ -543,20 +545,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.fnWithSingleParam(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -571,7 +572,7 @@ describe("Comparison", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -585,9 +586,9 @@ describe("Comparison", async () => {
   });
 
   it("passes a oneOf comparison", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
@@ -599,20 +600,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.fnWithSingleParam(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameterAsOneOf(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -629,9 +629,9 @@ describe("Comparison", async () => {
   });
 
   it("passes a oneOf comparison for dynamic", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithTwoMixedParams")
     );
@@ -644,20 +644,19 @@ describe("Comparison", async () => {
           0,
           (await testContract.populateTransaction.fnWithTwoMixedParams(a, b))
             .data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameterAsOneOf(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -679,9 +678,9 @@ describe("Comparison", async () => {
   });
 
   it("passes a oneOf comparison for dynamic32", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("dynamicDynamic32")
     );
@@ -693,20 +692,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.dynamicDynamic32(a, b)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameterAsOneOf(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -741,9 +739,9 @@ describe("Comparison", async () => {
   });
 
   it("re-scopes a oneOf comparison to simple paramComp", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
@@ -755,20 +753,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.fnWithSingleParam(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameterAsOneOf(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -788,7 +785,7 @@ describe("Comparison", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -802,9 +799,9 @@ describe("Comparison", async () => {
   });
 
   it("should pass a gt/lt comparison", async () => {
-    const { modifier, testContract, owner, invoker } = await setup();
+    const { modifier, testContract, owner, invoker, badger } = await setup();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
@@ -816,20 +813,19 @@ describe("Comparison", async () => {
           testContract.address,
           0,
           (await testContract.populateTransaction.fnWithSingleParam(a)).data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     // set it to true
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -845,7 +841,7 @@ describe("Comparison", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
