@@ -2,7 +2,7 @@ import { expect } from "chai";
 import hre, { deployments, waffle } from "hardhat";
 import "@nomiclabs/hardhat-ethers";
 
-describe.only("OnlyOwner", async () => {
+describe("OnlyOwner", async () => {
   const baseSetup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");

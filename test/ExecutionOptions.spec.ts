@@ -10,7 +10,7 @@ const OPTIONS_BOTH = 3;
 const BADGE_ID = 0;
 const ONE_TOKEN = 1;
 
-describe.only("ExecutionOptions", async () => {
+describe("ExecutionOptions", async () => {
   const setup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");
