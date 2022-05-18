@@ -339,22 +339,16 @@ describe.only("Clearance", async () => {
       .connect(owner)
       .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
-    await modifier
-      .connect(invoker)
-      .execTransactionFromModule(
-        testContract.address,
-        0,
-        dataDoEvenLess,
-        0,
-        BADGE_ID
-      );
-
-    await hre.ethers.provider.send("evm_increaseTime", [3600]);
-
     await expect(
       modifier
         .connect(invoker)
-        .executeNextTx(testContract.address, 0, dataDoEvenLess, 0, BADGE_ID)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataDoEvenLess,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testContract, "DoEvenLess");
   });
 

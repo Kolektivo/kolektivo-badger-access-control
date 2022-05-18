@@ -36,18 +36,9 @@ struct TargetAddress {
     ExecutionOptions options;
 }
 
-struct Function {
-    uint256 packedFunction;
-    uint256 txCooldown;
-    uint256 txNonce;
-    uint256 queueNonce;
-    mapping(uint256 => bytes32) txHash;
-    mapping(uint256 => uint256) txCreatedAt;
-}
-
 struct Role {
     mapping(address => TargetAddress) targets;
-    mapping(bytes32 => Function) functions;
+    mapping(bytes32 => uint256) functions;
     mapping(bytes32 => bytes32) compValues;
     mapping(bytes32 => bytes32[]) compValuesOneOf;
 }
@@ -270,9 +261,9 @@ library PermissionsDelay {
         }
 
         if (target.clearance == Clearance.Function) {
-            uint256 scopeConfig = role
-                .functions[keyForFunctions(targetAddress, bytes4(data))]
-                .packedFunction;
+            uint256 scopeConfig = role.functions[
+                keyForFunctions(targetAddress, bytes4(data))
+            ];
 
             if (scopeConfig == 0) {
                 revert FunctionNotAllowed();
@@ -381,63 +372,6 @@ library PermissionsDelay {
         revert ParameterNotOneOfAllowed();
     }
 
-    function enqueue(
-        Role storage role,
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Enum.Operation operation
-    ) external {
-        Function storage callFunction = role.functions[
-            keyForFunctions(to, bytes4(data))
-        ];
-
-        callFunction.txHash[callFunction.queueNonce] = getTransactionHash(
-            to,
-            value,
-            data,
-            operation
-        );
-        callFunction.txCreatedAt[callFunction.queueNonce] = block.timestamp;
-
-        callFunction.queueNonce++;
-    }
-
-    /// @dev Executes the next transaction only if the cooldown has passed and the transaction has not expired
-    /// @param to Destination address of module transaction
-    /// @param value Ether value of module transaction
-    /// @param data Data payload of module transaction
-    /// @param operation Operation type of module transaction
-    /// @notice The txIndex used by this function is always 0
-    function executable(
-        Role storage role,
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Enum.Operation operation
-    ) public view {
-        Function storage callFunction = role.functions[
-            keyForFunctions(to, bytes4(data))
-        ];
-
-        require(
-            callFunction.txNonce < callFunction.queueNonce,
-            "Transaction queue is empty"
-        );
-
-        require(
-            block.timestamp - callFunction.txCreatedAt[callFunction.txNonce] >=
-                callFunction.txCooldown,
-            "Transaction is still in cooldown"
-        );
-
-        require(
-            callFunction.txHash[callFunction.txNonce] ==
-                getTransactionHash(to, value, data, operation),
-            "Transaction hashes do not match"
-        );
-    }
-
     /*
      *
      * SETTERS
@@ -495,13 +429,9 @@ library PermissionsDelay {
          * )
          */
         uint256 scopeConfig = packLeft(0, options, true, 0);
-
-        Function storage updatedFunction = role.functions[
+        role.functions[
             keyForFunctions(targetAddress, functionSig)
-        ];
-
-        updatedFunction.packedFunction = scopeConfig;
-        updatedFunction.txCooldown = txCooldown;
+        ] = scopeConfig;
 
         emit ScopeAllowFunction(
             badgeId,
@@ -518,9 +448,7 @@ library PermissionsDelay {
         address targetAddress,
         bytes4 functionSig
     ) external {
-        role
-            .functions[keyForFunctions(targetAddress, functionSig)]
-            .packedFunction = 0;
+        role.functions[keyForFunctions(targetAddress, functionSig)] = 0;
         emit ScopeRevokeFunction(badgeId, targetAddress, functionSig, 0);
     }
 
@@ -576,9 +504,9 @@ library PermissionsDelay {
         }
 
         //set scopeConfig
-        role
-            .functions[keyForFunctions(targetAddress, functionSig)]
-            .packedFunction = scopeConfig;
+        role.functions[
+            keyForFunctions(targetAddress, functionSig)
+        ] = scopeConfig;
 
         //set compValues
         for (uint256 i = 0; i < length; i++) {
@@ -609,14 +537,11 @@ library PermissionsDelay {
         bytes32 key = keyForFunctions(targetAddress, functionSig);
 
         //set scopeConfig
-        uint256 scopeConfig = packOptions(
-            role.functions[key].packedFunction,
-            options
-        );
+        uint256 scopeConfig = packOptions(role.functions[key], options);
 
-        role
-            .functions[keyForFunctions(targetAddress, functionSig)]
-            .packedFunction = scopeConfig;
+        role.functions[
+            keyForFunctions(targetAddress, functionSig)
+        ] = scopeConfig;
 
         emit ScopeFunctionExecutionOptions(
             badgeId,
@@ -647,13 +572,13 @@ library PermissionsDelay {
         // set scopeConfig
         bytes32 key = keyForFunctions(targetAddress, functionSig);
         uint256 scopeConfig = packParameter(
-            role.functions[key].packedFunction,
+            role.functions[key],
             index,
             true, // isScoped
             paramType,
             paramComp
         );
-        role.functions[key].packedFunction = scopeConfig;
+        role.functions[key] = scopeConfig;
 
         // set compValue
         role.compValues[
@@ -696,13 +621,13 @@ library PermissionsDelay {
         // set scopeConfig
         bytes32 key = keyForFunctions(targetAddress, functionSig);
         uint256 scopeConfig = packParameter(
-            role.functions[key].packedFunction,
+            role.functions[key],
             index,
             true, // isScoped
             paramType,
             Comparison.OneOf
         );
-        role.functions[key].packedFunction = scopeConfig;
+        role.functions[key] = scopeConfig;
 
         // set compValue
         key = keyForCompValues(targetAddress, functionSig, index);
@@ -739,13 +664,13 @@ library PermissionsDelay {
         // set scopeConfig
         bytes32 key = keyForFunctions(targetAddress, functionSig);
         uint256 scopeConfig = packParameter(
-            role.functions[key].packedFunction,
+            role.functions[key],
             index,
             false, // isScoped
             ParameterType(0),
             Comparison(0)
         );
-        role.functions[key].packedFunction = scopeConfig;
+        role.functions[key] = scopeConfig;
 
         emit UnscopeParameter(
             badgeId,

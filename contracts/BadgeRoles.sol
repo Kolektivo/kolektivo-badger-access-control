@@ -309,37 +309,6 @@ contract BadgeRoles is Module {
             badgeId
         );
 
-        // TODO: check implications of ignoring multisend
-        PermissionsDelay.enqueue(
-            badgeRoles[badgeId],
-            to,
-            value,
-            data,
-            operation
-        );
-    }
-
-    /// @dev Executes the next transaction only if the cooldown has passed and the transaction has not expired
-    /// @param to Destination address of module transaction
-    /// @param value Ether value of module transaction
-    /// @param data Data payload of module transaction
-    /// @param operation Operation type of module transaction
-    /// @notice The txIndex used by this function is always 0
-    function executeNextTx(
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Enum.Operation operation,
-        uint256 badgeId
-    ) public returns (bool success) {
-        PermissionsDelay.executable(
-            badgeRoles[badgeId],
-            to,
-            value,
-            data,
-            operation
-        );
-
         return exec(to, value, data, operation);
     }
 
