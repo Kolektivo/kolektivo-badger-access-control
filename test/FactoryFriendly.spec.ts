@@ -7,7 +7,7 @@ import "@nomiclabs/hardhat-ethers";
 const FirstAddress = "0x0000000000000000000000000000000000000001";
 const saltNonce = "0xfa";
 
-describe.only("Module works with factory", () => {
+describe("Module works with factory", () => {
   const paramsTypes = ["address", "address", "address", "address"];
 
   const baseSetup = deployments.createFixture(async () => {
