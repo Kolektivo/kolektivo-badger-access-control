@@ -596,7 +596,8 @@ describe("PluckParam - Decoding", async () => {
           testPluckParam.address,
           0,
           `${SELECTOR}aabbccdd`,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("CalldataOutOfBounds()");
   });

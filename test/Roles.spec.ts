@@ -1,15 +1,14 @@
 import { AddressOne } from "@gnosis.pm/safe-contracts";
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
-
 import "@nomiclabs/hardhat-ethers";
+
 import { buildContractCall, buildMultiSendSafeTx } from "./utils";
-import { Contract } from "ethers";
 
 const ZeroAddress = "0x0000000000000000000000000000000000000000";
 const FirstAddress = "0x0000000000000000000000000000000000000001";
 
-describe.only("RolesModifier", async () => {
+describe("RolesModifier", async () => {
   const baseSetup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");

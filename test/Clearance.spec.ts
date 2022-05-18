@@ -50,8 +50,6 @@ describe("Clearance", async () => {
   const OPTIONS_DELEGATECALL = 1;
   const OPTIONS_BOTH = 2;
 
-  const txCooldown = 3600;
-
   it("allows and then disallows a target", async () => {
     const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
@@ -141,8 +139,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SELECTOR,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     const { data } = await testContract.populateTransaction.doNothing();
@@ -190,8 +187,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SELECTOR,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     const { data } = await testContract.populateTransaction.doNothing();
@@ -256,8 +252,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SELECTOR,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     await expect(
@@ -307,8 +302,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SELECTOR,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     await expect(
@@ -378,8 +372,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SEL_DONOTHING,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     await modifier
@@ -388,8 +381,7 @@ describe("Clearance", async () => {
         BADGE_ID,
         testContract.address,
         SEL_DOEVENLESS,
-        OPTIONS_NONE,
-        txCooldown
+        OPTIONS_NONE
       );
 
     await expect(
