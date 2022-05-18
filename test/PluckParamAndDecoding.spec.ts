@@ -30,11 +30,11 @@ describe("PluckParam - Decoding", async () => {
 
     const [owner, invoker] = waffle.provider.getWallets();
 
-    const Permissions = await hre.ethers.getContractFactory("PermissionsDelay");
+    const Permissions = await hre.ethers.getContractFactory("Permissions");
     const permissions = await Permissions.deploy();
-    const Modifier = await hre.ethers.getContractFactory("BadgeRoles", {
+    const Modifier = await hre.ethers.getContractFactory("Roles", {
       libraries: {
-        PermissionsDelay: permissions.address,
+        Permissions: permissions.address,
       },
     });
 

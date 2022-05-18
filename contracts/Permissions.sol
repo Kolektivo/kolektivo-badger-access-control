@@ -2,6 +2,8 @@
 pragma solidity ^0.8.6;
 
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
+import "./IBadger.sol";
+import "hardhat/console.sol";
 
 enum ParameterType {
     Static,
@@ -35,7 +37,6 @@ struct TargetAddress {
 }
 
 struct Role {
-    mapping(address => bool) members;
     mapping(address => TargetAddress) targets;
     mapping(bytes32 => uint256) functions;
     mapping(bytes32 => bytes32) compValues;
@@ -46,27 +47,27 @@ library Permissions {
     uint256 internal constant SCOPE_MAX_PARAMS = 48;
 
     event AllowTarget(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         ExecutionOptions options
     );
-    event RevokeTarget(uint16 role, address targetAddress);
-    event ScopeTarget(uint16 role, address targetAddress);
+    event RevokeTarget(uint256 badgeId, address targetAddress);
+    event ScopeTarget(uint256 badgeId, address targetAddress);
     event ScopeAllowFunction(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 selector,
         ExecutionOptions options,
         uint256 resultingScopeConfig
     );
     event ScopeRevokeFunction(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 selector,
         uint256 resultingScopeConfig
     );
     event ScopeFunction(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         bool[] isParamScoped,
@@ -77,14 +78,14 @@ library Permissions {
         uint256 resultingScopeConfig
     );
     event ScopeFunctionExecutionOptions(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         ExecutionOptions options,
         uint256 resultingScopeConfig
     );
     event ScopeParameter(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index,
@@ -94,7 +95,7 @@ library Permissions {
         uint256 resultingScopeConfig
     );
     event ScopeParameterAsOneOf(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index,
@@ -103,7 +104,7 @@ library Permissions {
         uint256 resultingScopeConfig
     );
     event UnscopeParameter(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index,
@@ -179,9 +180,11 @@ library Permissions {
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation operation
+        Enum.Operation operation,
+        IBadger badger,
+        uint256 badgeId
     ) public view {
-        if (!role.members[msg.sender]) {
+        if ((badger.balanceOf(msg.sender, badgeId)) == 0) {
             revert NoMembership();
         }
         if (multisend == to) {
@@ -377,41 +380,41 @@ library Permissions {
 
     function allowTarget(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         ExecutionOptions options
     ) external {
         role.targets[targetAddress] = TargetAddress(Clearance.Target, options);
-        emit AllowTarget(roleId, targetAddress, options);
+        emit AllowTarget(badgeId, targetAddress, options);
     }
 
     function revokeTarget(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress
     ) external {
         role.targets[targetAddress] = TargetAddress(
             Clearance.None,
             ExecutionOptions.None
         );
-        emit RevokeTarget(roleId, targetAddress);
+        emit RevokeTarget(badgeId, targetAddress);
     }
 
     function scopeTarget(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress
     ) external {
         role.targets[targetAddress] = TargetAddress(
             Clearance.Function,
             ExecutionOptions.None
         );
-        emit ScopeTarget(roleId, targetAddress);
+        emit ScopeTarget(badgeId, targetAddress);
     }
 
     function scopeAllowFunction(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         ExecutionOptions options
@@ -428,8 +431,9 @@ library Permissions {
         role.functions[
             keyForFunctions(targetAddress, functionSig)
         ] = scopeConfig;
+
         emit ScopeAllowFunction(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             options,
@@ -439,17 +443,17 @@ library Permissions {
 
     function scopeRevokeFunction(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig
     ) external {
         role.functions[keyForFunctions(targetAddress, functionSig)] = 0;
-        emit ScopeRevokeFunction(roleId, targetAddress, functionSig, 0);
+        emit ScopeRevokeFunction(badgeId, targetAddress, functionSig, 0);
     }
 
     function scopeFunction(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         bool[] memory isScoped,
@@ -510,7 +514,7 @@ library Permissions {
             ] = compressCompValue(paramType[i], compValue[i]);
         }
         emit ScopeFunction(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             isScoped,
@@ -524,7 +528,7 @@ library Permissions {
 
     function scopeFunctionExecutionOptions(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         ExecutionOptions options
@@ -539,7 +543,7 @@ library Permissions {
         ] = scopeConfig;
 
         emit ScopeFunctionExecutionOptions(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             options,
@@ -549,7 +553,7 @@ library Permissions {
 
     function scopeParameter(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index,
@@ -581,7 +585,7 @@ library Permissions {
         ] = compressCompValue(paramType, compValue);
 
         emit ScopeParameter(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             index,
@@ -594,7 +598,7 @@ library Permissions {
 
     function scopeParameterAsOneOf(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index,
@@ -635,7 +639,7 @@ library Permissions {
         }
 
         emit ScopeParameterAsOneOf(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             index,
@@ -647,7 +651,7 @@ library Permissions {
 
     function unscopeParameter(
         Role storage role,
-        uint16 roleId,
+        uint256 badgeId,
         address targetAddress,
         bytes4 functionSig,
         uint256 index
@@ -668,7 +672,7 @@ library Permissions {
         role.functions[key] = scopeConfig;
 
         emit UnscopeParameter(
-            roleId,
+            badgeId,
             targetAddress,
             functionSig,
             index,
@@ -980,5 +984,14 @@ library Permissions {
             paramType == ParameterType.Static
                 ? bytes32(compValue)
                 : keccak256(compValue);
+    }
+
+    function getTransactionHash(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(to, value, data, operation));
     }
 }

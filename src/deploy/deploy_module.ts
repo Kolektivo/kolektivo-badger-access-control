@@ -7,7 +7,7 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployments, getNamedAccounts } = hre;
   const { deployer } = await getNamedAccounts();
   const { deploy } = deployments;
-  const args = [FirstAddress, FirstAddress, FirstAddress];
+  const args = [FirstAddress, FirstAddress, FirstAddress, FirstAddress];
 
   const txCheck = await deploy("Permissions", {
     from: deployer,
