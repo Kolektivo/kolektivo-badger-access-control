@@ -3,7 +3,6 @@ pragma solidity ^0.8.6;
 
 import "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import "./IBadger.sol";
-import "hardhat/console.sol";
 
 enum ParameterType {
     Static,
