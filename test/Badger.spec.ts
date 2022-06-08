@@ -3,7 +3,7 @@ import { expect } from "chai";
 import { Contract } from "ethers";
 import { ethers, deployments } from "hardhat";
 
-const baseUri = "https://api.test.com/stuff/{id}.json";
+const baseUri = "ipfs://";
 
 const setupTest = deployments.createFixture(async ({ deployments, ethers }) => {
   await deployments.fixture();
@@ -236,7 +236,7 @@ describe("Badger", function () {
   });
 
   describe("#setApprovalForAll", () => {
-    beforeEach("create token tier & mint", async () => {
+    beforeEach("mint token", async () => {
       await badgerInstance.mint(alice.address, initalTokenId, amount);
     });
 
@@ -244,6 +244,36 @@ describe("Badger", function () {
       await expect(
         badgerInstance.connect(alice).setApprovalForAll(bob.address, true)
       ).to.be.revertedWith("TransferDisabled()");
+    });
+  });
+
+  describe("#setUri", () => {
+    it("throws if not owner", async () => {
+      await expect(
+        badgerInstance.connect(alice).setUri(initalTokenId, "")
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+
+    it("updates the uri", async () => {
+      const uri = "420";
+      await badgerInstance.setUri(initalTokenId, uri);
+
+      expect(await badgerInstance.uri(initalTokenId)).to.equal(baseUri + uri);
+    });
+  });
+
+  describe("#setBaseUri", () => {
+    it("throws if not owner", async () => {
+      await expect(
+        badgerInstance.connect(alice).setBaseUri("")
+      ).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+
+    it("updates the base uri", async () => {
+      const newBase = "abc";
+      await badgerInstance.setBaseUri(newBase);
+
+      expect(await badgerInstance.uri(initalTokenId)).to.equal(newBase);
     });
   });
 });
