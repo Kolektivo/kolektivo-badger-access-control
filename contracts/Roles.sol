@@ -335,4 +335,8 @@ contract Roles is Module {
         );
         return execAndReturnData(to, value, data, operation);
     }
+
+    function updateBadger(address newBadger) external onlyOwner {
+        badger = IBadger(newBadger);
+    }
 }

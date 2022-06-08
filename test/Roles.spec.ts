@@ -1680,4 +1680,20 @@ describe("RolesModifier", async () => {
       ).to.be.revertedWith("FunctionNotAllowed");
     });
   });
+
+  describe("updateBadger()", () => {
+    it("reverts if not authorized", async () => {
+      const { modifier } = await txSetup();
+      await expect(modifier.updateBadger(AddressOne)).to.be.revertedWith(
+        "Ownable: caller is not the owner"
+      );
+    });
+
+    it("sets new badger address", async () => {
+      const { modifier, owner } = await setupRolesWithOwnerAndInvoker();
+      await modifier.connect(owner).updateBadger(AddressOne);
+
+      expect(await modifier.badger()).to.equal(AddressOne);
+    });
+  });
 });
