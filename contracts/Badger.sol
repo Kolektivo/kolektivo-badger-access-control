@@ -8,6 +8,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Badger is ERC1155, Ownable {
     /*
+        State Variables
+    */
+
+    mapping(uint256 => string) public tokenUris;
+
+    /*
         Errors
     */
 
@@ -35,6 +41,27 @@ contract Badger is ERC1155, Ownable {
     */
 
     constructor(string memory _baseUri) ERC1155(_baseUri) {}
+
+    /*
+        Configuration
+    */
+
+    /**
+     * @dev                 sets a uri for a token to be appended to baseUri
+     * @param tokenId       id of token (category)
+     * @param newUri        uri to be appended
+     */
+    function setUri(uint256 tokenId, string memory newUri) external onlyOwner {
+        tokenUris[tokenId] = newUri;
+    }
+
+    /**
+     * @dev                 sets a base uri for all token ids
+     * @param baseUri       base uri (is appended by tokenUri)
+     */
+    function setBaseUri(string memory baseUri) external onlyOwner {
+        _setURI(baseUri);
+    }
 
     /*
         Minting & burning
@@ -125,5 +152,25 @@ contract Badger is ERC1155, Ownable {
         if (to != address(0) && from != address(0)) {
             revert TransferDisabled();
         }
+    }
+
+    /*
+        Metadata
+    */
+
+    /**
+     * @dev                 returns the uri for a given token
+     * @notice              consists of a concatenation of baseUri and uriId
+     * @param tokenId       tokenId for which the uri should be retrieved
+     */
+    function uri(uint256 tokenId)
+        public
+        view
+        virtual
+        override
+        returns (string memory)
+    {
+        string memory baseUri = super.uri(tokenId);
+        return string(abi.encodePacked(baseUri, tokenUris[tokenId]));
     }
 }
