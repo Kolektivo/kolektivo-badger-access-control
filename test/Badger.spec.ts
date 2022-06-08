@@ -262,7 +262,7 @@ describe("Badger", function () {
     });
   });
 
-  describe.only("#setBaseUri", () => {
+  describe("#setBaseUri", () => {
     it("throws if not owner", async () => {
       await expect(
         badgerInstance.connect(alice).setBaseUri("")
