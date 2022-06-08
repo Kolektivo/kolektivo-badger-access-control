@@ -27,7 +27,10 @@ describe("Scoping", async () => {
     const avatar = await Avatar.deploy();
     const TestContract = await hre.ethers.getContractFactory("TestContract");
     const testContract = await TestContract.deploy();
-    return { Avatar, avatar, testContract };
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
+    return { Avatar, avatar, testContract, badger };
   });
 
   const setupRolesWithOwnerAndInvoker = deployments.createFixture(async () => {
@@ -46,10 +49,9 @@ describe("Scoping", async () => {
     const modifier = await Modifier.deploy(
       owner.address,
       base.avatar.address,
-      base.avatar.address
+      base.avatar.address,
+      base.badger.address
     );
-
-    await modifier.enableModule(invoker.address);
 
     return {
       ...base,
@@ -61,17 +63,15 @@ describe("Scoping", async () => {
   });
 
   it("scoping one param should work", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 1;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     const { data: dataFail } =
       await testContract.populateTransaction.fnWithThreeParams(1, 2, 3);
@@ -79,12 +79,12 @@ describe("Scoping", async () => {
     const { data: dataOk } =
       await testContract.populateTransaction.fnWithThreeParams(1, 4, 3);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeAllowFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_NONE
@@ -93,13 +93,19 @@ describe("Scoping", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataFail, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataFail,
+          0,
+          BADGE_ID
+        )
     ).to.not.be.reverted;
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -111,35 +117,39 @@ describe("Scoping", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataFail, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataFail,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataOk, 0)
+        .execTransactionFromModule(testContract.address, 0, dataOk, 0, BADGE_ID)
     ).to.not.be.reverted;
   });
 
   it("unscoping one param should work", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -151,7 +161,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -169,48 +179,58 @@ describe("Scoping", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataFail, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataFail,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     // sanity check
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataOk, 0)
+        .execTransactionFromModule(testContract.address, 0, dataOk, 0, BADGE_ID)
     ).to.not.be.reverted;
 
     await modifier
       .connect(owner)
-      .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 1);
+      .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 1);
 
     // works after unscoping
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataFail, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataFail,
+          0,
+          BADGE_ID
+        )
     ).to.not.be.reverted;
   });
 
   it("scoping one param should work after allow function", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     // this call is supposed to be redudant. This test is checking that scoping one para after scoping all works
     await modifier
       .connect(owner)
       .scopeAllowFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_NONE
@@ -219,7 +239,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -237,7 +257,8 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
@@ -250,35 +271,34 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(7, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.not.be.reverted;
   });
 
   it("scoping one param should work after scope function", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
     const { data: dataFail } =
       await testContract.populateTransaction.fnWithThreeParams(1, 2, 3);
     const { data: dataOk } =
       await testContract.populateTransaction.fnWithThreeParams(1, 7, 3);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         [false, true, false],
@@ -291,20 +311,26 @@ describe("Scoping", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataFail, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          0,
+          dataFail,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, 0, dataOk, 0)
+        .execTransactionFromModule(testContract.address, 0, dataOk, 0, BADGE_ID)
     ).to.not.be.reverted;
 
     // set last param also as scoped
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         2,
@@ -323,7 +349,8 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 7, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
     await expect(
@@ -335,7 +362,8 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 8)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
     await expect(
@@ -347,30 +375,29 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 7, 8)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.not.be.reverted;
   });
 
   it("function scoping all params off is equivalent to allowing function", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -388,14 +415,15 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         [false, false, false],
@@ -414,30 +442,29 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.emit(testContract, "FnWithThreeParams");
   });
 
   it("function scoping all params off, including dynamic types, is equivalent to allow function", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithTwoMixedParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeAllowFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_NONE
@@ -455,14 +482,15 @@ describe("Scoping", async () => {
               "Hello World!"
             )
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.emit(testContract, "FnWithTwoMixedParams");
 
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         [false, false],
@@ -484,30 +512,29 @@ describe("Scoping", async () => {
               "Hello World!"
             )
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.emit(testContract, "FnWithTwoMixedParams");
   });
 
   it("unscoping all params one by one is equivalent to allowFunction", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         [true, true, false],
@@ -523,7 +550,7 @@ describe("Scoping", async () => {
 
     await modifier
       .connect(owner)
-      .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 0);
+      .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 0);
 
     //if some params still scoped returned ParamNotAllowed
     await expect(
@@ -535,13 +562,14 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     await modifier
       .connect(owner)
-      .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 1);
+      .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 1);
 
     //all params off -> FunctionNotAllowed
     await expect(
@@ -553,29 +581,28 @@ describe("Scoping", async () => {
           (
             await testContract.populateTransaction.fnWithThreeParams(1, 2, 3)
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.emit(testContract, "FnWithThreeParams");
   });
   it("unscoping all params one by one, including dynamic types, is equivalent to allowFunction", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithTwoMixedParams")
     );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -587,7 +614,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -609,14 +636,15 @@ describe("Scoping", async () => {
               "Hello World!"
             )
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("ParameterNotAllowed()");
 
     // should work after we unscope first parameter
     await modifier
       .connect(owner)
-      .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 0);
+      .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 0);
 
     await expect(
       modifier
@@ -630,14 +658,15 @@ describe("Scoping", async () => {
               "Hello World!"
             )
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.emit(testContract, "FnWithTwoMixedParams");
 
     // unscope second parameter, leaves no parameter scoped
     await modifier
       .connect(owner)
-      .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 1);
+      .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 1);
 
     // whole function should be not allowed
     await expect(
@@ -652,28 +681,27 @@ describe("Scoping", async () => {
               "Something not previously allowed"
             )
           ).data,
-          0
+          0,
+          BADGE_ID
         )
     ).to.emit(testContract, "FnWithTwoMixedParams");
   });
 
   it("update paramComp should work on already scoped parameter", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithSingleParam")
     );
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeAllowFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_NONE
@@ -687,7 +715,8 @@ describe("Scoping", async () => {
           0,
           (await testContract.populateTransaction.fnWithSingleParam(param))
             .data,
-          0
+          0,
+          BADGE_ID
         );
 
     // sanity
@@ -696,7 +725,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -714,7 +743,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -728,10 +757,10 @@ describe("Scoping", async () => {
   });
 
   it("scoping a high parameter index, after a lower one should work", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
 
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
@@ -745,19 +774,18 @@ describe("Scoping", async () => {
           0,
           (await testContract.populateTransaction.fnWithThreeParams(a, b, c))
             .data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -771,7 +799,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         1,
@@ -787,10 +815,10 @@ describe("Scoping", async () => {
   });
 
   it("scoping a low parameter index, after a higher one should work", async () => {
-    const { modifier, testContract, owner, invoker } =
+    const { modifier, testContract, owner, invoker, badger } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
 
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("fnWithThreeParams")
@@ -804,19 +832,18 @@ describe("Scoping", async () => {
           0,
           (await testContract.populateTransaction.fnWithThreeParams(a, b, c))
             .data,
-          0
+          0,
+          BADGE_ID
         );
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         2,
@@ -830,7 +857,7 @@ describe("Scoping", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         0,
@@ -854,12 +881,12 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       await expect(
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             new Array(49).fill(false),
@@ -874,7 +901,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             new Array(48).fill(false),
@@ -894,13 +921,13 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
 
       await expect(
         modifier
           .connect(owner)
           .scopeParameter(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             48,
@@ -914,7 +941,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameter(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             47,
@@ -933,12 +960,12 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       await expect(
         modifier
           .connect(owner)
           .scopeParameterAsOneOf(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             48,
@@ -951,7 +978,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameterAsOneOf(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             47,
@@ -969,17 +996,17 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       await expect(
         modifier
           .connect(owner)
-          .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 48)
+          .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 48)
       ).to.be.revertedWith("ScopeMaxParametersExceeded()");
 
       await expect(
         modifier
           .connect(owner)
-          .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 47)
+          .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 47)
       ).to.not.be.reverted;
     });
   });
@@ -1000,14 +1027,14 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       const IS_SCOPED = true;
 
       await expect(
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             [IS_SCOPED],
@@ -1022,7 +1049,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             [IS_SCOPED],
@@ -1037,7 +1064,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             [IS_SCOPED],
@@ -1053,7 +1080,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             [IS_SCOPED, !IS_SCOPED],
@@ -1076,12 +1103,12 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       await expect(
         modifier
           .connect(owner)
           .scopeParameter(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1095,7 +1122,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameter(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1109,7 +1136,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameter(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1128,12 +1155,12 @@ describe("Scoping", async () => {
         testContract.interface.getFunction("doNothing")
       );
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
       await expect(
         modifier
           .connect(owner)
           .scopeParameterAsOneOf(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1149,7 +1176,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameterAsOneOf(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1165,7 +1192,7 @@ describe("Scoping", async () => {
         modifier
           .connect(owner)
           .scopeParameterAsOneOf(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             0,
@@ -1183,12 +1210,12 @@ describe("Scoping", async () => {
       testContract.interface.getFunction("doNothing")
     );
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     await expect(
       modifier
         .connect(owner)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -1201,7 +1228,7 @@ describe("Scoping", async () => {
       modifier
         .connect(owner)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -1214,7 +1241,7 @@ describe("Scoping", async () => {
       modifier
         .connect(owner)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,

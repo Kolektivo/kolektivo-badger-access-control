@@ -1,8 +1,8 @@
 import { AddressOne } from "@gnosis.pm/safe-contracts";
 import { expect } from "chai";
 import hre, { deployments, waffle, ethers } from "hardhat";
-
 import "@nomiclabs/hardhat-ethers";
+
 import { buildContractCall, buildMultiSendSafeTx } from "./utils";
 
 const ZeroAddress = "0x0000000000000000000000000000000000000000";
@@ -15,7 +15,10 @@ describe("RolesModifier", async () => {
     const avatar = await Avatar.deploy();
     const TestContract = await hre.ethers.getContractFactory("TestContract");
     const testContract = await TestContract.deploy();
-    return { Avatar, avatar, testContract };
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
+    return { Avatar, avatar, testContract, badger };
   });
 
   const setupTestWithTestAvatar = deployments.createFixture(async () => {
@@ -31,7 +34,8 @@ describe("RolesModifier", async () => {
     const modifier = await Modifier.deploy(
       base.avatar.address,
       base.avatar.address,
-      base.avatar.address
+      base.avatar.address,
+      base.badger.address
     );
     return { ...base, Modifier, modifier };
   });
@@ -52,10 +56,9 @@ describe("RolesModifier", async () => {
     const modifier = await Modifier.deploy(
       owner.address,
       base.avatar.address,
-      base.avatar.address
+      base.avatar.address,
+      base.badger.address
     );
-
-    await modifier.enableModule(invoker.address);
 
     return {
       ...base,
@@ -163,6 +166,7 @@ describe("RolesModifier", async () => {
       const modifier = await Modifier.deploy(
         user1.address,
         user1.address,
+        user1.address,
         user1.address
       );
       await modifier.deployed();
@@ -172,128 +176,17 @@ describe("RolesModifier", async () => {
     });
   });
 
-  describe("disableModule()", async () => {
-    it("reverts if not authorized", async () => {
-      const { modifier } = await txSetup();
-      await expect(
-        modifier.disableModule(FirstAddress, user1.address)
-      ).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
-    it("reverts if module is null or sentinel", async () => {
-      const { avatar, modifier } = await txSetup();
-      const disable = await modifier.populateTransaction.disableModule(
-        FirstAddress,
-        FirstAddress
-      );
-      await expect(
-        avatar.exec(modifier.address, 0, disable.data)
-      ).to.be.revertedWith("Invalid module");
-    });
-
-    it("reverts if module is not added ", async () => {
-      const { avatar, modifier } = await txSetup();
-      const disable = await modifier.populateTransaction.disableModule(
-        ZeroAddress,
-        user1.address
-      );
-      await expect(
-        avatar.exec(modifier.address, 0, disable.data)
-      ).to.be.revertedWith("Module already disabled");
-    });
-
-    it("disables a module()", async () => {
-      const { avatar, modifier } = await txSetup();
-      const enable = await modifier.populateTransaction.enableModule(
-        user1.address
-      );
-      const disable = await modifier.populateTransaction.disableModule(
-        FirstAddress,
-        user1.address
-      );
-
-      await avatar.exec(modifier.address, 0, enable.data);
-      await expect(await modifier.isModuleEnabled(user1.address)).to.be.equals(
-        true
-      );
-      await avatar.exec(modifier.address, 0, disable.data);
-      await expect(await modifier.isModuleEnabled(user1.address)).to.be.equals(
-        false
-      );
-    });
-  });
-
-  describe("enableModule()", async () => {
-    it("reverts if not authorized", async () => {
-      const { modifier } = await txSetup();
-      await expect(modifier.enableModule(user1.address)).to.be.revertedWith(
-        "Ownable: caller is not the owner"
-      );
-    });
-
-    it("reverts if module is already enabled", async () => {
-      const { avatar, modifier } = await txSetup();
-      const enable = await modifier.populateTransaction.enableModule(
-        user1.address
-      );
-
-      await avatar.exec(modifier.address, 0, enable.data);
-      await expect(
-        avatar.exec(modifier.address, 0, enable.data)
-      ).to.be.revertedWith("Module already enabled");
-    });
-
-    it("reverts if module is invalid ", async () => {
-      const { avatar, modifier } = await txSetup();
-      const enable = await modifier.populateTransaction.enableModule(
-        FirstAddress
-      );
-
-      await expect(
-        avatar.exec(modifier.address, 0, enable.data)
-      ).to.be.revertedWith("Invalid module");
-    });
-
-    it("enables a module", async () => {
-      const { avatar, modifier } = await txSetup();
-      const enable = await modifier.populateTransaction.enableModule(
-        user1.address
-      );
-
-      await avatar.exec(modifier.address, 0, enable.data);
-      await expect(await modifier.isModuleEnabled(user1.address)).to.be.equals(
-        true
-      );
-      await expect(
-        await modifier.getModulesPaginated(FirstAddress, 10)
-      ).to.be.deep.equal([[user1.address], FirstAddress]);
-    });
-  });
-
-  describe("assignRoles()", () => {
-    it("should throw on length mismatch", async () => {
-      const { modifier, owner } = await setupRolesWithOwnerAndInvoker();
-      await expect(
-        modifier.connect(owner).assignRoles(user1.address, [1, 2], [true])
-      ).to.be.revertedWith("ArraysDifferentLength()");
-    });
-    it("reverts if not authorized", async () => {
-      const { modifier } = await txSetup();
-      await expect(
-        modifier.assignRoles(user1.address, [1], [true])
-      ).to.be.revertedWith("Ownable: caller is not the owner");
-    });
-
+  describe("badges as access control criteria", () => {
     it("assigns roles to a module", async () => {
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
 
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
       // blank allow all calls to testContract from role 0
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       // expect it to fail, before assigning role
       await expect(
@@ -303,13 +196,12 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            0
+            0,
+            BADGE_ID
           )
       ).to.be.revertedWith("NoMembership()");
 
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       // expect it to succeed, after assigning role
       await expect(
@@ -319,26 +211,25 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            0
+            0,
+            BADGE_ID
           )
       ).to.emit(testContract, "DoNothing");
     });
 
     it("revokes roles to a module", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
 
       // blank allow all calls to testContract from role 0
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       //authorize
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       // expect it to succeed, after assigning role
       await expect(
@@ -348,14 +239,13 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            0
+            0,
+            BADGE_ID
           )
       ).to.emit(testContract, "DoNothing");
 
       //revoke
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [false]);
+      await badger.burn(invoker.address, BADGE_ID, 1);
 
       // expect it to fail, after revoking
       await expect(
@@ -365,73 +255,43 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            0
+            0,
+            BADGE_ID
           )
       ).to.be.revertedWith("NoMembership()");
-    });
-
-    it("it enables the module if necessary", async () => {
-      const { avatar, modifier } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
-
-      await expect(await modifier.isModuleEnabled(user1.address)).to.equal(
-        true
-      );
-
-      // it doesn't revert when assigning additional roles
-      const assignSecond = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1, 2],
-        [true, true]
-      );
-      await expect(avatar.exec(modifier.address, 0, assignSecond.data)).to.not
-        .be.reverted;
-    });
-
-    it("emits the AssignRoles event", async () => {
-      const { avatar, modifier } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-
-      await expect(avatar.exec(modifier.address, 0, assign.data))
-        .to.emit(modifier, "AssignRoles")
-        .withArgs(user1.address, [1], [true]);
     });
   });
 
   describe("execTransactionFromModule()", () => {
     it("reverts if data is set and is not at least 4 bytes", async () => {
-      const { modifier, testContract, invoker } =
+      const { modifier, testContract, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 0;
 
-      await modifier.assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModule(testContract.address, 0, "0xab", 0)
+          .execTransactionFromModule(
+            testContract.address,
+            0,
+            "0xab",
+            0,
+            BADGE_ID
+          )
       ).to.be.revertedWith("FunctionSignatureTooShort()");
     });
     it("reverts if called from module not assigned any role", async () => {
-      const { modifier, testContract, owner } =
+      const { modifier, testContract, owner, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 1;
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
-
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
       const mint = await testContract.populateTransaction.mint(
         user1.address,
         99
@@ -442,32 +302,32 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
-      ).to.be.revertedWith("Module not authorized");
+      ).to.be.revertedWith("NoMembership()");
     });
 
     it("reverts if the call is not an allowed target", async () => {
-      const { avatar, modifier, testContract } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
+      const { avatar, modifier, testContract, badger } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
-        [1],
-        [true]
+        BADGE_ID,
+        1
       );
-      await avatar.exec(modifier.address, 0, assign.data);
+
+      await avatar.exec(badger.address, 0, assign.data);
 
       const allowTargetAddress = await modifier.populateTransaction.allowTarget(
-        1,
+        BADGE_ID,
         testContract.address,
         OPTIONS_NONE
       );
       await avatar.exec(modifier.address, 0, allowTargetAddress.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const mint = await testContract.populateTransaction.mint(
         user1.address,
@@ -476,32 +336,35 @@ describe("RolesModifier", async () => {
 
       const someOtherAddress = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
       await expect(
-        modifier.execTransactionFromModule(someOtherAddress, 0, mint.data, 0)
+        modifier.execTransactionFromModule(
+          someOtherAddress,
+          0,
+          mint.data,
+          0,
+          BADGE_ID
+        )
       ).to.be.revertedWith("TargetAddressNotAllowed()");
     });
 
     it("executes a call to an allowed target", async () => {
-      const { avatar, modifier, testContract } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
+      const { avatar, modifier, testContract, badger } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
-        [1],
-        [true]
+        BADGE_ID,
+        1
       );
-      await avatar.exec(modifier.address, 0, assign.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const allowTargetAddress = await modifier.populateTransaction.allowTarget(
-        1,
+        BADGE_ID,
         testContract.address,
         OPTIONS_NONE
       );
       await avatar.exec(modifier.address, 0, allowTargetAddress.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const mint = await testContract.populateTransaction.mint(
         user1.address,
@@ -513,29 +376,35 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "Mint");
     });
 
     it("reverts if value parameter is not allowed", async () => {
-      const { avatar, modifier, testContract, encodedParam_1, encodedParam_2 } =
-        await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const {
+        avatar,
+        modifier,
+        testContract,
+        encodedParam_1,
+        encodedParam_2,
+        badger,
+      } = await txSetup();
+      const BADGE_ID = 1;
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
-        1,
+        BADGE_ID,
         testContract.address
       );
       await avatar.exec(modifier.address, 0, functionScoped.data);
@@ -562,28 +431,32 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.be.revertedWith("ParameterNotAllowed()");
     });
 
     it("executes a call with allowed value parameter", async () => {
       const user1 = (await hre.ethers.getSigners())[0];
+      const BADGE_ID = 1;
+      const {
+        avatar,
+        modifier,
+        testContract,
+        encodedParam_1,
+        encodedParam_2,
+        badger,
+      } = await txSetup();
 
-      const { avatar, modifier, testContract, encodedParam_1, encodedParam_2 } =
-        await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      await badger.transferOwnership(avatar.address);
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -613,7 +486,8 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "Mint");
     });
@@ -630,20 +504,18 @@ describe("RolesModifier", async () => {
         encodedParam_7,
         encodedParam_8,
         encodedParam_9,
+        badger,
       } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
+      const BADGE_ID = 1;
 
-      await avatar.exec(modifier.address, 0, assign.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -694,7 +566,8 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           dynamic.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.be.revertedWith("ParameterNotAllowed()");
     });
@@ -711,20 +584,19 @@ describe("RolesModifier", async () => {
         encodedParam_7,
         encodedParam_8,
         encodedParam_9,
+        badger,
       } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
+      const BADGE_ID = 1;
 
-      await avatar.exec(modifier.address, 0, assign.data);
+      await badger.transferOwnership(avatar.address);
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -775,7 +647,8 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           dynamic.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "TestDynamic");
     });
@@ -797,27 +670,26 @@ describe("RolesModifier", async () => {
         tx_1,
         tx_2,
         tx_3,
+        badger,
       } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+
       const MultiSend = await hre.ethers.getContractFactory("MultiSend");
       const multisend = await MultiSend.deploy();
 
-      const assign = await modifier.populateTransaction.assignRoles(
+      const assign = await badger.populateTransaction.mint(
         user1.address,
-        [1],
-        [true]
+        BADGE_ID,
+        1
       );
-      await avatar.exec(modifier.address, 0, assign.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const multiSendTarget = await modifier.populateTransaction.setMultisend(
         multisend.address
       );
       await avatar.exec(modifier.address, 0, multiSendTarget.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const scopeTarget = await modifier.populateTransaction.scopeTarget(
         1,
@@ -883,7 +755,8 @@ describe("RolesModifier", async () => {
           multisend.address,
           0,
           multiTx.data,
-          1
+          1,
+          BADGE_ID
         )
       ).to.be.revertedWith("ParameterNotAllowed()");
     });
@@ -896,27 +769,26 @@ describe("RolesModifier", async () => {
         encodedParam_1,
         encodedParam_2,
         tx_1,
+        badger,
       } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
+        user1.address,
+        BADGE_ID,
+        1
+      );
+      await avatar.exec(badger.address, 0, assign.data);
+
       const MultiSend = await hre.ethers.getContractFactory("MultiSend");
       const multisend = await MultiSend.deploy();
-
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
 
       const multiSendTarget = await modifier.populateTransaction.setMultisend(
         multisend.address
       );
       await avatar.exec(modifier.address, 0, multiSendTarget.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -946,7 +818,8 @@ describe("RolesModifier", async () => {
           multisend.address,
           0,
           multiTx.data,
-          1
+          1,
+          BADGE_ID
         )
       ).to.be.revertedWith("UnacceptableMultiSendOffset()");
     });
@@ -968,27 +841,26 @@ describe("RolesModifier", async () => {
         tx_1,
         tx_2,
         tx_3,
+        badger,
       } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
+        user1.address,
+        BADGE_ID,
+        1
+      );
+      await avatar.exec(badger.address, 0, assign.data);
+
       const MultiSend = await hre.ethers.getContractFactory("MultiSend");
       const multisend = await MultiSend.deploy();
-
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
 
       const multiSendTarget = await modifier.populateTransaction.setMultisend(
         multisend.address
       );
       await avatar.exec(modifier.address, 0, multiSendTarget.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const scopeTarget = await modifier.populateTransaction.scopeTarget(
         1,
@@ -1047,26 +919,25 @@ describe("RolesModifier", async () => {
           multisend.address,
           0,
           multiTx.data,
-          1
+          1,
+          BADGE_ID
         )
       ).to.emit(testContract, "TestDynamic");
     });
 
     it("reverts if value parameter is less than allowed", async () => {
-      const { avatar, modifier, testContract, encodedParam_1 } =
+      const { avatar, modifier, testContract, encodedParam_1, badger } =
         await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const BADGE_ID = 1;
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const scopeTarget = await modifier.populateTransaction.scopeTarget(
         1,
@@ -1101,26 +972,25 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.be.revertedWith("ParameterLessThanAllowed");
     });
 
     it("executes if value parameter is greater than allowed", async () => {
-      const { avatar, modifier, testContract, encodedParam_1 } =
+      const { avatar, modifier, testContract, encodedParam_1, badger } =
         await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const BADGE_ID = 1;
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -1155,26 +1025,25 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "Mint");
     });
 
     it("reverts if value parameter is greater than allowed", async () => {
-      const { avatar, modifier, testContract, encodedParam_1 } =
+      const { avatar, modifier, testContract, encodedParam_1, badger } =
         await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const BADGE_ID = 1;
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -1209,26 +1078,25 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.be.revertedWith("ParameterGreaterThanAllowed");
     });
 
     it("executes if value parameter is less than allowed", async () => {
-      const { avatar, modifier, testContract, encodedParam_1 } =
+      const { avatar, modifier, testContract, encodedParam_1, badger } =
         await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const BADGE_ID = 1;
 
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
+      await badger.transferOwnership(avatar.address);
+
+      const assign = await badger.populateTransaction.mint(
         user1.address,
+        BADGE_ID,
         1
       );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const functionScoped = await modifier.populateTransaction.scopeTarget(
         1,
@@ -1263,7 +1131,8 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "Mint");
     });
@@ -1272,9 +1141,10 @@ describe("RolesModifier", async () => {
   describe("execTransactionFromModuleReturnData()", () => {
     it("reverts if called from module not assigned any role", async () => {
       const { avatar, modifier, testContract } = await txSetup();
-      const ROLE_ID = 0;
+      const BADGE_ID = 1;
+
       const allowTargetAddress = await modifier.populateTransaction.allowTarget(
-        1,
+        BADGE_ID,
         testContract.address,
         OPTIONS_NONE
       );
@@ -1290,19 +1160,21 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          ROLE_ID
+          1,
+          BADGE_ID
         )
-      ).to.be.revertedWith("Module not authorized");
+      ).to.be.revertedWith("NoMembership()");
     });
 
     it("reverts if the call is not an allowed target", async () => {
-      const { avatar, modifier, testContract } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const { avatar, modifier, testContract, badger } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+      const assign = await badger
+        .connect(avatar.address)
+        .populateTransaction.mint(user1.address, 1, 1);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const allowTargetAddress = await modifier.populateTransaction.allowTarget(
         1,
@@ -1310,12 +1182,6 @@ describe("RolesModifier", async () => {
         OPTIONS_NONE
       );
       await avatar.exec(modifier.address, 0, allowTargetAddress.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const mint = await testContract.populateTransaction.mint(
         user1.address,
@@ -1328,33 +1194,28 @@ describe("RolesModifier", async () => {
           someOtherAddress,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.be.revertedWith("TargetAddressNotAllowed()");
     });
 
     it("executes a call to an allowed target", async () => {
-      const { avatar, modifier, testContract } = await txSetup();
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [1],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
+      const { avatar, modifier, testContract, badger } = await txSetup();
+      const BADGE_ID = 1;
+
+      await badger.transferOwnership(avatar.address);
+      const assign = await badger
+        .connect(avatar.address)
+        .populateTransaction.mint(user1.address, 1, 1);
+      await avatar.exec(badger.address, 0, assign.data);
 
       const allowTargetAddress = await modifier.populateTransaction.allowTarget(
-        1,
+        BADGE_ID,
         testContract.address,
         OPTIONS_NONE
       );
       await avatar.exec(modifier.address, 0, allowTargetAddress.data);
-
-      const defaultRole = await modifier.populateTransaction.setDefaultRole(
-        user1.address,
-        1
-      );
-
-      await avatar.exec(modifier.address, 0, defaultRole.data);
 
       const mint = await testContract.populateTransaction.mint(
         user1.address,
@@ -1366,266 +1227,13 @@ describe("RolesModifier", async () => {
           testContract.address,
           0,
           mint.data,
-          0
+          0,
+          BADGE_ID
         )
       ).to.emit(testContract, "Mint");
     });
   });
 
-  describe("execTransactionWithRole()", () => {
-    it("reverts if inner tx reverted and shouldRevert true", async () => {
-      const { modifier, testContract, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const ROLE_ID = 0;
-      const SHOULD_REVERT = true;
-      const fnThatReverts =
-        await testContract.populateTransaction.fnThatReverts();
-
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
-
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionWithRole(
-            testContract.address,
-            0,
-            fnThatReverts.data,
-            0,
-            ROLE_ID,
-            SHOULD_REVERT
-          )
-      ).to.be.revertedWith("ModuleTransactionFailed()");
-    });
-    it("does not revert if inner tx reverted and shouldRevert false", async () => {
-      const { modifier, testContract, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const ROLE_ID = 0;
-      const SHOULD_REVERT = true;
-      const fnThatReverts =
-        await testContract.populateTransaction.fnThatReverts();
-
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
-
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionWithRole(
-            testContract.address,
-            0,
-            fnThatReverts.data,
-            0,
-            ROLE_ID,
-            !SHOULD_REVERT
-          )
-      ).to.not.be.reverted;
-    });
-  });
-
-  describe("execTransactionWithRoleReturnData()", () => {
-    it("reverts if called from module not assigned any role", async () => {
-      const { modifier, testContract, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const ROLE_ID = 1;
-      const SHOULD_REVERT = true;
-
-      const mint = await testContract.populateTransaction.mint(
-        user1.address,
-        99
-      );
-
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionWithRoleReturnData(
-            testContract.address,
-            0,
-            mint.data,
-            0,
-            ROLE_ID,
-            !SHOULD_REVERT
-          )
-      ).to.be.revertedWith("NoMembership()");
-    });
-
-    it("reverts if inner tx reverted and shouldRevert true", async () => {
-      const { modifier, testContract, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const SHOULD_REVERT = true;
-      const ROLE_ID = 0;
-      const fnThatReverts =
-        await testContract.populateTransaction.fnThatReverts();
-
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
-
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionWithRoleReturnData(
-            testContract.address,
-            0,
-            fnThatReverts.data,
-            0,
-            ROLE_ID,
-            SHOULD_REVERT
-          )
-      ).to.be.revertedWith("ModuleTransactionFailed()");
-    });
-
-    it("does not revert if inner tx reverted and shouldRevert false", async () => {
-      const { modifier, testContract, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const SHOULD_REVERT = true;
-      const ROLE_ID = 0;
-      const fnThatReverts =
-        await testContract.populateTransaction.fnThatReverts();
-
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
-
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionWithRoleReturnData(
-            testContract.address,
-            0,
-            fnThatReverts.data,
-            0,
-            ROLE_ID,
-            !SHOULD_REVERT
-          )
-      ).to.be.not.be.reverted;
-    });
-
-    it("executes a call with multisend tx", async () => {
-      const {
-        avatar,
-        modifier,
-        testContract,
-        encodedParam_1,
-        encodedParam_2,
-        encodedParam_3,
-        encodedParam_4,
-        encodedParam_5,
-        encodedParam_6,
-        encodedParam_7,
-        encodedParam_8,
-        encodedParam_9,
-        tx_1,
-        tx_2,
-        tx_3,
-      } = await txSetup();
-
-      const SHOULD_REVERT = true;
-
-      const MultiSend = await hre.ethers.getContractFactory("MultiSend");
-      const multisend = await MultiSend.deploy();
-
-      const ROLE_ID = 1;
-
-      const assign = await modifier.populateTransaction.assignRoles(
-        user1.address,
-        [ROLE_ID],
-        [true]
-      );
-      await avatar.exec(modifier.address, 0, assign.data);
-
-      const multiSendTarget = await modifier.populateTransaction.setMultisend(
-        multisend.address
-      );
-      await avatar.exec(modifier.address, 0, multiSendTarget.data);
-
-      const scopeTarget = await modifier.populateTransaction.scopeTarget(
-        1,
-        testContract.address
-      );
-      await avatar.exec(modifier.address, 0, scopeTarget.data);
-
-      const paramScoped = await modifier.populateTransaction.scopeFunction(
-        ROLE_ID,
-        testContract.address,
-        "0x40c10f19",
-        [true, true],
-        [TYPE_STATIC, TYPE_STATIC],
-        [0, 0],
-        [encodedParam_1, encodedParam_2],
-        OPTIONS_NONE
-      );
-      await avatar.exec(modifier.address, 0, paramScoped.data);
-
-      const paramScoped_2 = await modifier.populateTransaction.scopeFunction(
-        ROLE_ID,
-        testContract.address,
-        "0x273454bf",
-        [true, true, true, true, true, true, true],
-        [
-          TYPE_DYNAMIC,
-          TYPE_STATIC,
-          TYPE_DYNAMIC,
-          TYPE_STATIC,
-          TYPE_STATIC,
-          TYPE_DYNAMIC,
-          TYPE_DYNAMIC,
-        ],
-        [0, 0, 0, 0, 0, 0, 0],
-        [
-          encodedParam_3,
-          encodedParam_4,
-          encodedParam_5,
-          encodedParam_6,
-          encodedParam_7,
-          encodedParam_8,
-          encodedParam_9,
-        ],
-        OPTIONS_NONE
-      );
-      await avatar.exec(modifier.address, 0, paramScoped_2.data);
-
-      const multiTx = buildMultiSendSafeTx(
-        multisend,
-        [tx_1, tx_2, tx_3, tx_1, tx_2, tx_3],
-        0
-      );
-
-      await expect(
-        modifier.execTransactionWithRoleReturnData(
-          multisend.address,
-          0,
-          multiTx.data,
-          1,
-          ROLE_ID,
-          !SHOULD_REVERT
-        )
-      ).to.emit(testContract, "TestDynamic");
-    });
-  });
   describe("setMultisend()", () => {
     it("reverts if not authorized", async () => {
       const { modifier } = await txSetup();
@@ -1659,11 +1267,10 @@ describe("RolesModifier", async () => {
     });
 
     it("sets allowed address to true", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const SHOULD_REVERT = true;
-      const ROLE_ID = 1;
+      const BADGE_ID = 1;
 
       const doNothingArgs = [
         testContract.address,
@@ -1672,79 +1279,76 @@ describe("RolesModifier", async () => {
         0,
       ];
 
-      // assign a role to invoker
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
       // expect to fail due to no permissions
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...doNothingArgs)
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...doNothingArgs, BADGE_ID)
       ).to.be.revertedWith("NoMembership()");
 
       // allow testContract address for role
       await expect(
         modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE)
-      ).to.not.be.reverted;
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE)
+      ).not.to.be.reverted;
 
       // expect to fail with default role
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...doNothingArgs)
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...doNothingArgs, BADGE_ID)
       ).to.be.revertedWith("NoMembership()");
+
+      // assign a role to invoker
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       // should work with the configured role
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionWithRole(
-            ...[...doNothingArgs, ROLE_ID, !SHOULD_REVERT]
-          )
+          .execTransactionFromModule(...doNothingArgs, BADGE_ID)
       ).to.emit(testContract, "DoNothing");
     });
 
     it("sets allowed address to false", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
       const SHOULD_REVERT = true;
-      const ROLE_ID = 1;
+      const BADGE_ID = 1;
 
       const execWithRoleArgs = [
         testContract.address,
         0,
         testContract.interface.encodeFunctionData("doNothing()"),
         0,
-        ROLE_ID,
-        !SHOULD_REVERT,
+        BADGE_ID,
       ];
 
       // assign a role to invoker
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       // allow testContract address for role
       await expect(
         modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE)
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE)
       );
 
       // this call should work
       await expect(
-        modifier.connect(invoker).execTransactionWithRole(...execWithRoleArgs)
+        modifier.connect(invoker).execTransactionFromModule(...execWithRoleArgs)
       ).to.emit(testContract, "DoNothing");
 
       // Revoke access
       await expect(
-        modifier.connect(owner).revokeTarget(ROLE_ID, testContract.address)
+        modifier.connect(owner).revokeTarget(BADGE_ID, testContract.address)
       ).to.not.be.reverted;
 
       // fails after revoke
       await expect(
-        modifier.connect(invoker).execTransactionWithRole(...execWithRoleArgs)
+        modifier.connect(invoker).execTransactionFromModule(...execWithRoleArgs)
       ).to.be.revertedWith("TargetAddressNotAllowed()");
     });
   });
@@ -1758,13 +1362,11 @@ describe("RolesModifier", async () => {
     });
 
     it("sets allowed address to true", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      const BADGE_ID = 1;
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       const execArgs = [
         testContract.address,
@@ -1776,17 +1378,19 @@ describe("RolesModifier", async () => {
       // allow calls (but not delegate)
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       // still getting the delegateCallNotAllowed error
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...execArgs)
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...execArgs, BADGE_ID)
       ).to.be.revertedWith("DelegateCallNotAllowed()");
 
       // allow delegate calls to address
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_DELEGATECALL);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_DELEGATECALL);
 
       // ok
       await expect(
@@ -1796,19 +1400,18 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            1
+            1,
+            BADGE_ID
           )
       ).to.not.be.reverted;
     });
 
     it("sets allowed address to false", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      const BADGE_ID = 1;
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       const execArgs = [
         testContract.address,
@@ -1819,7 +1422,7 @@ describe("RolesModifier", async () => {
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_DELEGATECALL);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_DELEGATECALL);
 
       // ok
       await expect(
@@ -1829,18 +1432,21 @@ describe("RolesModifier", async () => {
             testContract.address,
             0,
             testContract.interface.encodeFunctionData("doNothing()"),
-            1
+            1,
+            BADGE_ID
           )
       ).to.not.be.reverted;
 
       // revoke delegate calls to address
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       // still getting the delegateCallNotAllowed error
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...execArgs)
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...execArgs, BADGE_ID)
       ).to.be.revertedWith("DelegateCallNotAllowed()");
     });
   });
@@ -1863,10 +1469,10 @@ describe("RolesModifier", async () => {
     });
 
     it("sets parameters scoped to true", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 1;
       const COMP_TYPE_EQ = 0;
       const SELECTOR = testContract.interface.getSighash(
         testContract.interface.getFunction("fnWithSingleParam")
@@ -1881,25 +1487,25 @@ describe("RolesModifier", async () => {
         0,
       ];
 
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       // works before making function parameter scoped
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...EXEC_ARGS(1))
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...EXEC_ARGS(1), BADGE_ID)
       ).to.not.be.reverted;
 
-      await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+      await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
       await modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [true],
@@ -1911,12 +1517,16 @@ describe("RolesModifier", async () => {
 
       // ngmi
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...EXEC_ARGS(1))
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...EXEC_ARGS(1), BADGE_ID)
       ).to.be.revertedWith("ParameterNotAllowed");
 
       // gmi
       await expect(
-        modifier.connect(invoker).execTransactionFromModule(...EXEC_ARGS(2))
+        modifier
+          .connect(invoker)
+          .execTransactionFromModule(...EXEC_ARGS(2), BADGE_ID)
       ).to.not.be.reverted;
     });
   });
@@ -1924,34 +1534,40 @@ describe("RolesModifier", async () => {
   describe("allowTarget - canSend", () => {
     it("reverts if not authorized", async () => {
       const { modifier } = await txSetup();
+      const BADGE_ID = 1;
+
       await expect(
-        modifier.allowTarget(1, AddressOne, OPTIONS_SEND)
+        modifier.allowTarget(BADGE_ID, AddressOne, OPTIONS_SEND)
       ).to.be.revertedWith("Ownable: caller is not the owner");
     });
 
     it("sets send allowed to true", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 1;
+
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       await modifier
         .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModuleReturnData(testContract.address, 1, "0x", 0)
+          .execTransactionFromModuleReturnData(
+            testContract.address,
+            1,
+            "0x",
+            0,
+            BADGE_ID
+          )
       ).to.be.revertedWith("SendNotAllowed");
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_SEND);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_SEND);
 
       await expect(
         modifier
@@ -1960,23 +1576,22 @@ describe("RolesModifier", async () => {
             testContract.address,
             10000,
             "0x",
-            0
+            0,
+            BADGE_ID
           )
       ).to.not.be.reverted;
     });
 
     it("sets send allowed to false", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      const BADGE_ID = 1;
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_SEND);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_SEND);
 
       // should work with sendAllowed true
       await expect(
@@ -1986,19 +1601,26 @@ describe("RolesModifier", async () => {
             testContract.address,
             10000,
             "0x",
-            0
+            0,
+            BADGE_ID
           )
       ).to.not.be.reverted;
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       // should work with sendAllowed false
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModuleReturnData(testContract.address, 1, "0x", 0)
+          .execTransactionFromModuleReturnData(
+            testContract.address,
+            1,
+            "0x",
+            0,
+            BADGE_ID
+          )
       ).to.be.revertedWith("SendNotAllowed");
     });
   });
@@ -2012,10 +1634,10 @@ describe("RolesModifier", async () => {
     });
 
     it("toggles allowed function false -> true -> false", async () => {
-      const { modifier, testContract, owner, invoker } =
+      const { modifier, testContract, owner, invoker, badger } =
         await setupRolesWithOwnerAndInvoker();
 
-      const ROLE_ID = 0;
+      const BADGE_ID = 1;
       const SELECTOR = testContract.interface.getSighash(
         testContract.interface.getFunction("doNothing")
       );
@@ -2025,19 +1647,18 @@ describe("RolesModifier", async () => {
         0,
         testContract.interface.encodeFunctionData("doNothing()"),
         0,
+        BADGE_ID,
       ];
 
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
+      await badger.mint(invoker.address, BADGE_ID, 1);
 
-      await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+      await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
       // allow the function
       await modifier
         .connect(owner)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -2051,87 +1672,12 @@ describe("RolesModifier", async () => {
       // revoke the function
       await modifier
         .connect(owner)
-        .scopeRevokeFunction(ROLE_ID, testContract.address, SELECTOR);
+        .scopeRevokeFunction(BADGE_ID, testContract.address, SELECTOR);
 
       // ngmi again
       await expect(
         modifier.connect(invoker).execTransactionFromModule(...EXEC_ARGS)
       ).to.be.revertedWith("FunctionNotAllowed");
-    });
-  });
-
-  describe("setDefaultRole()", () => {
-    it("reverts if not authorized", async () => {
-      const { modifier } = await txSetup();
-      await expect(modifier.setDefaultRole(AddressOne, 1)).to.be.revertedWith(
-        "Ownable: caller is not the owner"
-      );
-    });
-
-    it("sets default role", async () => {
-      const { modifier, testContract, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const ROLE1 = 1;
-      const ROLE2 = 2;
-
-      // grant roles 1 and 2 to invoker
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE1, ROLE2], [true, true]);
-
-      // make ROLE2 the default for invoker
-      await modifier.connect(owner).setDefaultRole(invoker.address, ROLE2);
-
-      // allow all calls to testContract from ROLE1
-      await modifier
-        .connect(owner)
-        .allowTarget(ROLE1, testContract.address, OPTIONS_NONE);
-
-      // expect it to fail
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionFromModule(
-            testContract.address,
-            0,
-            testContract.interface.encodeFunctionData("doNothing()"),
-            0
-          )
-      ).to.be.reverted;
-
-      // make ROLE1 the default to invoker
-      await modifier.connect(owner).setDefaultRole(invoker.address, ROLE1);
-
-      // gmi
-      await expect(
-        modifier
-          .connect(invoker)
-          .execTransactionFromModule(
-            testContract.address,
-            0,
-            testContract.interface.encodeFunctionData("doNothing()"),
-            0
-          )
-      ).to.emit(testContract, "DoNothing");
-    });
-
-    it("emits event with correct params", async () => {
-      const { modifier, owner, invoker } =
-        await setupRolesWithOwnerAndInvoker();
-
-      const ROLE_ID = 21;
-
-      // grant roles 1 and 2 to invoker
-      await modifier
-        .connect(owner)
-        .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-      await expect(
-        modifier.connect(owner).setDefaultRole(invoker.address, ROLE_ID)
-      )
-        .to.emit(modifier, "SetDefaultRole")
-        .withArgs(invoker.address, 21);
     });
   });
 });

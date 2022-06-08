@@ -17,7 +17,7 @@ const TYPE_DYNAMIC = 1;
 const TYPE_DYNAMIC32 = 2;
 
 describe("PluckParam - Decoding", async () => {
-  const ROLE_ID = 0;
+  const BADGE_ID = 0;
   const setup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");
@@ -38,19 +38,19 @@ describe("PluckParam - Decoding", async () => {
       },
     });
 
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
     const modifier = await Modifier.deploy(
       owner.address,
       avatar.address,
-      avatar.address
+      avatar.address,
+      badger.address
     );
 
-    await modifier.enableModule(invoker.address);
+    await badger.mint(invoker.address, BADGE_ID, 1);
 
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
-
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testPluckParam.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testPluckParam.address);
 
     return {
       testPluckParam,
@@ -58,6 +58,7 @@ describe("PluckParam - Decoding", async () => {
       modifier,
       owner,
       invoker,
+      badger,
     };
   });
 
@@ -71,7 +72,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true],
@@ -99,13 +100,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "StaticDynamic");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
 
@@ -119,7 +132,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -150,13 +163,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "StaticDynamicDynamic32");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
   it("static, dynamic32, dynamic - (uint32,bytes4[],string)", async () => {
@@ -169,7 +194,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -200,13 +225,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "StaticDynamic32Dynamic");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
 
@@ -220,7 +257,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -251,13 +288,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "DynamicStaticDynamic32");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
   it("dynamic, dynamic32, static - (string,uint32[],uint256)", async () => {
@@ -270,7 +319,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -301,13 +350,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "DynamicDynamic32Static");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
   it("dynamic32, static, dynamic - (address[],bytes2,bytes)", async () => {
@@ -320,7 +381,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -351,13 +412,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "Dynamic32StaticDynamic");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
   it("dynamic32, dynamic, static - (bytes2[],string,uint32)", async () => {
@@ -370,7 +443,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -401,13 +474,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "Dynamic32DynamicStatic");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
 
@@ -421,7 +506,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true, true, true],
@@ -450,13 +535,25 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.emit(testPluckParam, "UnsupportedFixedSizeAndDynamic");
 
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("ParameterNotAllowed()");
   });
 
@@ -470,7 +567,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeFunction(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         [true],
@@ -483,7 +580,13 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, SELECTOR, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          SELECTOR,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("CalldataOutOfBounds()");
 
     await expect(
@@ -493,7 +596,8 @@ describe("PluckParam - Decoding", async () => {
           testPluckParam.address,
           0,
           `${SELECTOR}aabbccdd`,
-          0
+          0,
+          BADGE_ID
         )
     ).to.be.revertedWith("CalldataOutOfBounds()");
   });
@@ -508,7 +612,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         0,
@@ -525,13 +629,13 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, data, 0)
+        .execTransactionFromModule(testPluckParam.address, 0, data, 0, BADGE_ID)
     ).to.emit(testPluckParam, "Static");
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         1,
@@ -544,7 +648,7 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, data, 0)
+        .execTransactionFromModule(testPluckParam.address, 0, data, 0, BADGE_ID)
     ).to.be.revertedWith("CalldataOutOfBounds()");
   });
 
@@ -562,7 +666,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         1,
@@ -586,21 +690,39 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataShort, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataShort,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("CalldataOutOfBounds()");
 
     // just the selector
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, SELECTOR, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          SELECTOR,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("CalldataOutOfBounds()");
 
     // ok
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.not.be.reverted;
   });
 
@@ -614,7 +736,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         1,
@@ -638,14 +760,26 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataBad, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataBad,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("CalldataOutOfBounds()");
 
     // ok
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.not.be.reverted;
   });
 
@@ -659,7 +793,7 @@ describe("PluckParam - Decoding", async () => {
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         1,
@@ -678,13 +812,19 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.not.be.reverted;
 
     await modifier
       .connect(owner)
       .scopeParameter(
-        ROLE_ID,
+        BADGE_ID,
         testPluckParam.address,
         SELECTOR,
         15,
@@ -696,7 +836,13 @@ describe("PluckParam - Decoding", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testPluckParam.address, 0, dataGood, 0)
+        .execTransactionFromModule(
+          testPluckParam.address,
+          0,
+          dataGood,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("CalldataOutOfBounds()");
   });
 });

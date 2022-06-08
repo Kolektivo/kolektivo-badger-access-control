@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity ^0.8.6;
 
-import "@gnosis.pm/zodiac/contracts/core/Modifier.sol";
+import "@gnosis.pm/zodiac/contracts/core/Module.sol";
 import "./Permissions.sol";
+import "./IBadger.sol";
 
-contract Roles is Modifier {
+contract Roles is Module {
     address public multisend;
+    IBadger public badger;
 
-    mapping(address => uint16) public defaultRoles;
-    mapping(uint16 => Role) internal roles;
+    mapping(uint256 => Role) internal badgeRoles;
 
-    event AssignRoles(address module, uint16[] roles, bool[] memberOf);
     event SetMultisendAddress(address multisendAddress);
     event RolesModSetup(
         address indexed initiator,
@@ -18,7 +18,6 @@ contract Roles is Modifier {
         address indexed avatar,
         address target
     );
-    event SetDefaultRole(address module, uint16 defaultRole);
 
     /// `setUpModules` has already been called
     error SetUpModulesAlreadyCalled();
@@ -38,33 +37,29 @@ contract Roles is Modifier {
     constructor(
         address _owner,
         address _avatar,
-        address _target
+        address _target,
+        address _badger
     ) {
-        bytes memory initParams = abi.encode(_owner, _avatar, _target);
+        bytes memory initParams = abi.encode(_owner, _avatar, _target, _badger);
         setUp(initParams);
     }
 
-    function setUp(bytes memory initParams) public override {
-        (address _owner, address _avatar, address _target) = abi.decode(
-            initParams,
-            (address, address, address)
-        );
+    function setUp(bytes memory initParams) public override initializer {
+        (
+            address _owner,
+            address _avatar,
+            address _target,
+            address _badger
+        ) = abi.decode(initParams, (address, address, address, address));
         __Ownable_init();
 
         avatar = _avatar;
         target = _target;
+        badger = IBadger(_badger);
 
         transferOwnership(_owner);
-        setupModules();
 
         emit RolesModSetup(msg.sender, _owner, _avatar, _target);
-    }
-
-    function setupModules() internal {
-        if (modules[SENTINEL_MODULES] != address(0)) {
-            revert SetUpModulesAlreadyCalled();
-        }
-        modules[SENTINEL_MODULES] = SENTINEL_MODULES;
     }
 
     /// @dev Set the address of the expected multisend library
@@ -77,15 +72,20 @@ contract Roles is Modifier {
 
     /// @dev Allows all calls made to an address.
     /// @notice Only callable by owner.
-    /// @param role Role to set for
+    /// @param badgeId Role to set for
     /// @param targetAddress Address to be allowed
     /// @param options defines whether or not delegate calls and/or eth can be sent to the target address.
     function allowTarget(
-        uint16 role,
+        uint256 badgeId,
         address targetAddress,
         ExecutionOptions options
     ) external onlyOwner {
-        Permissions.allowTarget(roles[role], role, targetAddress, options);
+        Permissions.allowTarget(
+            badgeRoles[badgeId],
+            badgeId,
+            targetAddress,
+            options
+        );
     }
 
     /// @dev Disallows all calls made to an address.
@@ -96,7 +96,7 @@ contract Roles is Modifier {
         external
         onlyOwner
     {
-        Permissions.revokeTarget(roles[role], role, targetAddress);
+        Permissions.revokeTarget(badgeRoles[role], role, targetAddress);
     }
 
     /// @dev Scopes calls to an address, limited to specific function signatures, and per function scoping rules.
@@ -107,7 +107,7 @@ contract Roles is Modifier {
         external
         onlyOwner
     {
-        Permissions.scopeTarget(roles[role], role, targetAddress);
+        Permissions.scopeTarget(badgeRoles[role], role, targetAddress);
     }
 
     /// @dev Allows a specific function signature on a scoped target.
@@ -123,7 +123,7 @@ contract Roles is Modifier {
         ExecutionOptions options
     ) external onlyOwner {
         Permissions.scopeAllowFunction(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
@@ -142,7 +142,7 @@ contract Roles is Modifier {
         bytes4 functionSig
     ) external onlyOwner {
         Permissions.scopeRevokeFunction(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig
@@ -170,7 +170,7 @@ contract Roles is Modifier {
         ExecutionOptions options
     ) external onlyOwner {
         Permissions.scopeFunction(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
@@ -196,7 +196,7 @@ contract Roles is Modifier {
         ExecutionOptions options
     ) external onlyOwner {
         Permissions.scopeFunctionExecutionOptions(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
@@ -223,7 +223,7 @@ contract Roles is Modifier {
         bytes calldata compValue
     ) external onlyOwner {
         Permissions.scopeParameter(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
@@ -252,7 +252,7 @@ contract Roles is Modifier {
         bytes[] calldata compValues
     ) external onlyOwner {
         Permissions.scopeParameterAsOneOf(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
@@ -275,41 +275,12 @@ contract Roles is Modifier {
         uint8 paramIndex
     ) external onlyOwner {
         Permissions.unscopeParameter(
-            roles[role],
+            badgeRoles[role],
             role,
             targetAddress,
             functionSig,
             paramIndex
         );
-    }
-
-    /// @dev Assigns and revokes roles to a given module.
-    /// @param module Module on which to assign/revoke roles.
-    /// @param _roles Roles to assign/revoke.
-    /// @param memberOf Assign (true) or revoke (false) corresponding _roles.
-    function assignRoles(
-        address module,
-        uint16[] calldata _roles,
-        bool[] calldata memberOf
-    ) external onlyOwner {
-        if (_roles.length != memberOf.length) {
-            revert ArraysDifferentLength();
-        }
-        for (uint16 i = 0; i < _roles.length; i++) {
-            roles[_roles[i]].members[module] = memberOf[i];
-        }
-        if (!isModuleEnabled(module)) {
-            enableModule(module);
-        }
-        emit AssignRoles(module, _roles, memberOf);
-    }
-
-    /// @dev Sets the default role used for a module if it calls execTransactionFromModule() or execTransactionFromModuleReturnData().
-    /// @param module Address of the module on which to set default role.
-    /// @param role Role to be set as default.
-    function setDefaultRole(address module, uint16 role) external onlyOwner {
-        defaultRoles[module] = role;
-        emit SetDefaultRole(module, role);
     }
 
     /// @dev Passes a transaction to the modifier.
@@ -322,16 +293,20 @@ contract Roles is Modifier {
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation operation
-    ) public override moduleOnly returns (bool success) {
+        Enum.Operation operation,
+        uint256 badgeId
+    ) public returns (bool success) {
         Permissions.check(
-            roles[defaultRoles[msg.sender]],
+            badgeRoles[badgeId],
             multisend,
             to,
             value,
             data,
-            operation
+            operation,
+            badger,
+            badgeId
         );
+
         return exec(to, value, data, operation);
     }
 
@@ -345,62 +320,19 @@ contract Roles is Modifier {
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation operation
-    ) public override moduleOnly returns (bool, bytes memory) {
+        Enum.Operation operation,
+        uint256 badgeId
+    ) public returns (bool, bytes memory) {
         Permissions.check(
-            roles[defaultRoles[msg.sender]],
+            badgeRoles[badgeId],
             multisend,
             to,
             value,
             data,
-            operation
+            operation,
+            badger,
+            badgeId
         );
         return execAndReturnData(to, value, data, operation);
-    }
-
-    /// @dev Passes a transaction to the modifier assuming the specified role.
-    /// @param to Destination address of module transaction
-    /// @param value Ether value of module transaction
-    /// @param data Data payload of module transaction
-    /// @param operation Operation type of module transaction
-    /// @param role Identifier of the role to assume for this transaction
-    /// @param shouldRevert Should the function revert on inner execution returning success false?
-    /// @notice Can only be called by enabled modules
-    function execTransactionWithRole(
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Enum.Operation operation,
-        uint16 role,
-        bool shouldRevert
-    ) public moduleOnly returns (bool success) {
-        Permissions.check(roles[role], multisend, to, value, data, operation);
-        success = exec(to, value, data, operation);
-        if (shouldRevert && !success) {
-            revert ModuleTransactionFailed();
-        }
-    }
-
-    /// @dev Passes a transaction to the modifier assuming the specified role. Expects return data.
-    /// @param to Destination address of module transaction
-    /// @param value Ether value of module transaction
-    /// @param data Data payload of module transaction
-    /// @param operation Operation type of module transaction
-    /// @param role Identifier of the role to assume for this transaction
-    /// @param shouldRevert Should the function revert on inner execution returning success false?
-    /// @notice Can only be called by enabled modules
-    function execTransactionWithRoleReturnData(
-        address to,
-        uint256 value,
-        bytes calldata data,
-        Enum.Operation operation,
-        uint16 role,
-        bool shouldRevert
-    ) public moduleOnly returns (bool success, bytes memory returnData) {
-        Permissions.check(roles[role], multisend, to, value, data, operation);
-        (success, returnData) = execAndReturnData(to, value, data, operation);
-        if (shouldRevert && !success) {
-            revert ModuleTransactionFailed();
-        }
     }
 }
