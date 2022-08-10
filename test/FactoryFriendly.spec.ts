@@ -8,12 +8,16 @@ const FirstAddress = "0x0000000000000000000000000000000000000001";
 const saltNonce = "0xfa";
 
 describe("Module works with factory", () => {
-  const paramsTypes = ["address", "address", "address"];
+  const paramsTypes = ["address", "address", "address", "address"];
 
   const baseSetup = deployments.createFixture(async () => {
     await deployments.fixture();
     const Factory = await hre.ethers.getContractFactory("ModuleProxyFactory");
     const factory = await Factory.deploy();
+
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
     const Permissions = await hre.ethers.getContractFactory("Permissions");
     const permissions = await Permissions.deploy();
     const Modifier = await hre.ethers.getContractFactory("Roles", {
@@ -25,18 +29,20 @@ describe("Module works with factory", () => {
     const masterCopy = await Modifier.deploy(
       FirstAddress,
       FirstAddress,
-      FirstAddress
+      FirstAddress,
+      badger.address
     );
 
-    return { factory, masterCopy, Modifier };
+    return { factory, masterCopy, Modifier, badger };
   });
 
   it("should throw because master copy is already initialized", async () => {
-    const { masterCopy } = await baseSetup();
+    const { masterCopy, badger } = await baseSetup();
     const encodedParams = new AbiCoder().encode(paramsTypes, [
       AddressOne,
       AddressOne,
       AddressOne,
+      badger.address,
     ]);
 
     await expect(masterCopy.setUp(encodedParams)).to.be.revertedWith(
@@ -45,9 +51,14 @@ describe("Module works with factory", () => {
   });
 
   it("should deploy new roles module proxy", async () => {
-    const { factory, masterCopy, Modifier } = await baseSetup();
+    const { factory, masterCopy, Modifier, badger } = await baseSetup();
     const [avatar, owner, target] = await ethers.getSigners();
-    const paramsValues = [owner.address, avatar.address, target.address];
+    const paramsValues = [
+      owner.address,
+      avatar.address,
+      target.address,
+      badger.address,
+    ];
     const encodedParams = [new AbiCoder().encode(paramsTypes, paramsValues)];
     const initParams = masterCopy.interface.encodeFunctionData(
       "setUp",

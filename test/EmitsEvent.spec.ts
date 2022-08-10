@@ -24,6 +24,9 @@ describe.skip("EmitsEvent", async () => {
     const Avatar = await hre.ethers.getContractFactory("TestAvatar");
     const avatar = await Avatar.deploy();
 
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
     const [owner] = waffle.provider.getWallets();
 
     const Permissions = await hre.ethers.getContractFactory("Permissions");
@@ -37,7 +40,8 @@ describe.skip("EmitsEvent", async () => {
     const modifier = await Modifier.deploy(
       owner.address,
       avatar.address,
-      avatar.address
+      avatar.address,
+      badger.address
     );
 
     return {
@@ -45,6 +49,7 @@ describe.skip("EmitsEvent", async () => {
       avatar,
       modifier,
       owner,
+      badger,
     };
   });
 

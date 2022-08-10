@@ -7,7 +7,8 @@ const OPTIONS_SEND = 1;
 const OPTIONS_DELEGATECALL = 2;
 const OPTIONS_BOTH = 3;
 
-const ROLE_ID = 0;
+const BADGE_ID = 0;
+const ONE_TOKEN = 1;
 
 describe("ExecutionOptions", async () => {
   const setup = deployments.createFixture(async () => {
@@ -16,6 +17,8 @@ describe("ExecutionOptions", async () => {
     const avatar = await Avatar.deploy();
     const TestContract = await hre.ethers.getContractFactory("TestContract");
     const testContract = await TestContract.deploy();
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
 
     const [owner, invoker] = waffle.provider.getWallets();
 
@@ -30,14 +33,11 @@ describe("ExecutionOptions", async () => {
     const modifier = await Modifier.deploy(
       owner.address,
       avatar.address,
-      avatar.address
+      avatar.address,
+      badger.address
     );
 
-    await modifier.enableModule(invoker.address);
-
-    await modifier
-      .connect(owner)
-      .assignRoles(invoker.address, [ROLE_ID], [true]);
+    await badger.mint(invoker.address, BADGE_ID, ONE_TOKEN);
 
     // fund avatar
     await invoker.sendTransaction({
@@ -53,6 +53,7 @@ describe("ExecutionOptions", async () => {
       modifier,
       owner,
       invoker,
+      badger,
     };
   });
 
@@ -68,12 +69,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
 
@@ -84,12 +91,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
 
@@ -103,12 +116,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_SEND);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_SEND);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveEthAndDoNothing")
           .withArgs(value);
@@ -121,12 +140,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_SEND);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_SEND);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveFallback")
           .withArgs(value);
@@ -142,12 +167,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_DELEGATECALL);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_DELEGATECALL);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
       it("ExecutionOptions.DELEGATECALL - FAILS sending ETH to fallback", async () => {
@@ -157,12 +188,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_DELEGATECALL);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_DELEGATECALL);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
       it("ExecutionOptions.BOTH - OK sending ETH to payable function", async () => {
@@ -175,12 +212,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_BOTH);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_BOTH);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveEthAndDoNothing")
           .withArgs(value);
@@ -196,12 +239,18 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .allowTarget(ROLE_ID, testContract.address, OPTIONS_BOTH);
+          .allowTarget(BADGE_ID, testContract.address, OPTIONS_BOTH);
 
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveEthAndDoNothing")
           .withArgs(value);
@@ -223,12 +272,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_NONE
@@ -237,7 +286,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
 
@@ -248,12 +303,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             "0x00000000",
             OPTIONS_NONE
@@ -262,7 +317,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
 
@@ -280,12 +341,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_SEND
@@ -294,7 +355,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveEthAndDoNothing")
           .withArgs(value);
@@ -306,12 +373,12 @@ describe("ExecutionOptions", async () => {
         const value = ethers.utils.parseEther("1.123");
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             "0x00000000",
             OPTIONS_SEND
@@ -320,7 +387,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveFallback")
           .withArgs(value);
@@ -342,7 +415,7 @@ describe("ExecutionOptions", async () => {
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_SEND
@@ -351,7 +424,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("TargetAddressNotAllowed()");
       });
 
@@ -369,12 +448,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_DELEGATECALL
@@ -383,7 +462,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
       it("ExecutionOptions.DELEGATECALL - FAILS sending ETH to fallback", async () => {
@@ -393,12 +478,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             "0x00000000",
             OPTIONS_DELEGATECALL
@@ -407,7 +492,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("SendNotAllowed()");
       });
 
@@ -425,12 +516,12 @@ describe("ExecutionOptions", async () => {
 
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_BOTH
@@ -439,7 +530,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveEthAndDoNothing")
           .withArgs(value);
@@ -451,12 +548,12 @@ describe("ExecutionOptions", async () => {
         const value = ethers.utils.parseEther("1.123");
         await modifier
           .connect(owner)
-          .scopeTarget(ROLE_ID, testContract.address);
+          .scopeTarget(BADGE_ID, testContract.address);
 
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             "0x00000000",
             OPTIONS_BOTH
@@ -465,7 +562,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, "0x", 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              "0x",
+              0,
+              BADGE_ID
+            )
         )
           .to.be.emit(testContract, "ReceiveFallback")
           .withArgs(value);
@@ -487,7 +590,7 @@ describe("ExecutionOptions", async () => {
         await modifier
           .connect(owner)
           .scopeAllowFunction(
-            ROLE_ID,
+            BADGE_ID,
             testContract.address,
             SELECTOR,
             OPTIONS_BOTH
@@ -496,7 +599,13 @@ describe("ExecutionOptions", async () => {
         await expect(
           modifier
             .connect(invoker)
-            .execTransactionFromModule(testContract.address, value, data, 0)
+            .execTransactionFromModule(
+              testContract.address,
+              value,
+              data,
+              0,
+              BADGE_ID
+            )
         ).to.be.revertedWith("TargetAddressNotAllowed()");
       });
     });
@@ -510,12 +619,12 @@ describe("ExecutionOptions", async () => {
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_DELEGATECALL);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_DELEGATECALL);
 
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModule(testContract.address, 0, data, 1)
+          .execTransactionFromModule(testContract.address, 0, data, 1, BADGE_ID)
       ).to.not.be.reverted;
     });
     it("target allowed - cannot delegatecall", async () => {
@@ -525,12 +634,12 @@ describe("ExecutionOptions", async () => {
 
       await modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE);
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE);
 
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModule(testContract.address, 0, data, 1)
+          .execTransactionFromModule(testContract.address, 0, data, 1, BADGE_ID)
       ).to.be.revertedWith("DelegateCallNotAllowed()");
     });
     it("target partially allowed - can delegatecall", async () => {
@@ -542,12 +651,12 @@ describe("ExecutionOptions", async () => {
 
       const { data } = await testContract.populateTransaction.emitTheSender();
 
-      await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+      await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
       await modifier
         .connect(owner)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_BOTH
@@ -556,7 +665,7 @@ describe("ExecutionOptions", async () => {
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModule(testContract.address, 0, data, 1)
+          .execTransactionFromModule(testContract.address, 0, data, 1, BADGE_ID)
       ).not.to.be.reverted;
     });
 
@@ -569,12 +678,12 @@ describe("ExecutionOptions", async () => {
 
       const { data } = await testContract.populateTransaction.emitTheSender();
 
-      await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+      await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
       await modifier
         .connect(owner)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -583,7 +692,7 @@ describe("ExecutionOptions", async () => {
       await expect(
         modifier
           .connect(invoker)
-          .execTransactionFromModule(testContract.address, 0, data, 1)
+          .execTransactionFromModule(testContract.address, 0, data, 1, BADGE_ID)
       ).to.be.revertedWith("DelegateCallNotAllowed()");
     });
   });
@@ -600,12 +709,12 @@ describe("ExecutionOptions", async () => {
     const { data } =
       await testContract.populateTransaction.receiveEthAndDoNothing();
 
-    await modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address);
+    await modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address);
 
     await modifier
       .connect(owner)
       .scopeAllowFunction(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_SEND
@@ -614,7 +723,13 @@ describe("ExecutionOptions", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, value, data, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          value,
+          data,
+          0,
+          BADGE_ID
+        )
     )
       .to.be.emit(testContract, "ReceiveEthAndDoNothing")
       .withArgs(value);
@@ -622,7 +737,7 @@ describe("ExecutionOptions", async () => {
     await modifier
       .connect(owner)
       .scopeFunctionExecutionOptions(
-        ROLE_ID,
+        BADGE_ID,
         testContract.address,
         SELECTOR,
         OPTIONS_NONE
@@ -631,7 +746,13 @@ describe("ExecutionOptions", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .execTransactionFromModule(testContract.address, value, data, 0)
+        .execTransactionFromModule(
+          testContract.address,
+          value,
+          data,
+          0,
+          BADGE_ID
+        )
     ).to.be.revertedWith("SendNotAllowed");
   });
 });

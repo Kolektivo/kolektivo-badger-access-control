@@ -25,13 +25,15 @@ describe("OnlyOwner", async () => {
       },
     });
 
+    const Badger = await hre.ethers.getContractFactory("Badger");
+    const badger = await Badger.deploy("ipfs://");
+
     const modifier = await Modifier.deploy(
       owner.address,
       base.avatar.address,
-      base.avatar.address
+      base.avatar.address,
+      badger.address
     );
-
-    await modifier.enableModule(invoker.address);
 
     return {
       ...base,
@@ -40,6 +42,7 @@ describe("OnlyOwner", async () => {
       owner,
       invoker,
       janeDoe,
+      badger,
     };
   });
 
@@ -56,24 +59,24 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
 
     await expect(
       modifier
         .connect(invoker)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE)
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(janeDoe)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE)
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(owner)
-        .allowTarget(ROLE_ID, testContract.address, OPTIONS_NONE)
+        .allowTarget(BADGE_ID, testContract.address, OPTIONS_NONE)
     ).to.not.be.reverted;
   });
 
@@ -81,36 +84,36 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
 
     await expect(
-      modifier.connect(invoker).scopeTarget(ROLE_ID, testContract.address)
+      modifier.connect(invoker).scopeTarget(BADGE_ID, testContract.address)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
-      modifier.connect(janeDoe).scopeTarget(ROLE_ID, testContract.address)
+      modifier.connect(janeDoe).scopeTarget(BADGE_ID, testContract.address)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
-      modifier.connect(owner).scopeTarget(ROLE_ID, testContract.address)
+      modifier.connect(owner).scopeTarget(BADGE_ID, testContract.address)
     ).to.not.be.reverted;
   });
   it("onlyOwner for revokeTarget, simple invoker fails", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
 
     await expect(
-      modifier.connect(invoker).revokeTarget(ROLE_ID, testContract.address)
+      modifier.connect(invoker).revokeTarget(BADGE_ID, testContract.address)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
-      modifier.connect(janeDoe).revokeTarget(ROLE_ID, testContract.address)
+      modifier.connect(janeDoe).revokeTarget(BADGE_ID, testContract.address)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
-      modifier.connect(owner).revokeTarget(ROLE_ID, testContract.address)
+      modifier.connect(owner).revokeTarget(BADGE_ID, testContract.address)
     ).to.not.be.reverted;
   });
 
@@ -118,7 +121,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -127,7 +130,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -138,7 +141,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(janeDoe)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -149,7 +152,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(owner)
         .scopeAllowFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -160,7 +163,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -168,26 +171,26 @@ describe("OnlyOwner", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .scopeRevokeFunction(ROLE_ID, testContract.address, SELECTOR)
+        .scopeRevokeFunction(BADGE_ID, testContract.address, SELECTOR)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(janeDoe)
-        .scopeRevokeFunction(ROLE_ID, testContract.address, SELECTOR)
+        .scopeRevokeFunction(BADGE_ID, testContract.address, SELECTOR)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(owner)
-        .scopeRevokeFunction(ROLE_ID, testContract.address, SELECTOR)
+        .scopeRevokeFunction(BADGE_ID, testContract.address, SELECTOR)
     ).to.not.be.reverted;
   });
   it("onlyOwner for scopeFunction, simple invoker fails", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -196,7 +199,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [],
@@ -211,7 +214,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(janeDoe)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [],
@@ -226,7 +229,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(owner)
         .scopeFunction(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           [],
@@ -241,7 +244,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -250,7 +253,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeFunctionExecutionOptions(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -261,7 +264,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeFunctionExecutionOptions(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -272,7 +275,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(owner)
         .scopeFunctionExecutionOptions(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           OPTIONS_NONE
@@ -283,7 +286,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -292,7 +295,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -306,7 +309,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(janeDoe)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -320,7 +323,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(owner)
         .scopeParameter(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -334,7 +337,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -343,7 +346,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(invoker)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -356,7 +359,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(janeDoe)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -369,7 +372,7 @@ describe("OnlyOwner", async () => {
       modifier
         .connect(owner)
         .scopeParameterAsOneOf(
-          ROLE_ID,
+          BADGE_ID,
           testContract.address,
           SELECTOR,
           0,
@@ -382,7 +385,7 @@ describe("OnlyOwner", async () => {
     const { modifier, testContract, owner, invoker, janeDoe } =
       await setupRolesWithOwnerAndInvoker();
 
-    const ROLE_ID = 0;
+    const BADGE_ID = 0;
     const SELECTOR = testContract.interface.getSighash(
       testContract.interface.getFunction("doNothing")
     );
@@ -390,19 +393,19 @@ describe("OnlyOwner", async () => {
     await expect(
       modifier
         .connect(invoker)
-        .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 0)
+        .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 0)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(janeDoe)
-        .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 0)
+        .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 0)
     ).to.be.revertedWith("Ownable: caller is not the owner");
 
     await expect(
       modifier
         .connect(owner)
-        .unscopeParameter(ROLE_ID, testContract.address, SELECTOR, 0)
+        .unscopeParameter(BADGE_ID, testContract.address, SELECTOR, 0)
     ).to.not.be.reverted;
   });
 });
